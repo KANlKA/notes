@@ -1,6 +1,4 @@
-# OOP Interview Notes — Coupa Prep
-
-> Code examples use **Python** for readability, with **Java** snippets wherever a concept (overloading, strict access modifiers, `final`, interfaces) is easier to show in a statically-typed language. Both are commonly accepted in Coupa interviews — know the concept, not just one syntax.
+# OOP Interview Notes (Java)
 
 ---
 
@@ -8,274 +6,436 @@
 
 ### 1.1 Class & Object
 
-A **class** is a blueprint/template. An **object** is a runtime instance of that class, occupying memory.
+A class is a blueprint. An object is a runtime instance of that class, occupying memory on the heap.
 
-```python
-class Car:
-    def __init__(self, brand, speed):
-        self.brand = brand      # instance variable
-        self.speed = speed
+```java
+class Car {
+    String brand;
+    int speed;
 
-    def accelerate(self, amount):   # method
-        self.speed += amount
-        return self.speed
+    Car(String brand, int speed) {
+        this.brand = brand;
+        this.speed = speed;
+    }
 
-car1 = Car("Toyota", 0)   # object 1
-car2 = Car("Honda", 0)    # object 2 — independent state
-car1.accelerate(20)
-print(car1.speed, car2.speed)   # 20 0
+    int accelerate(int amount) {
+        speed += amount;
+        return speed;
+    }
+}
+
+public class Main {
+    public static void main(String[] args) {
+        Car car1 = new Car("Toyota", 0);
+        Car car2 = new Car("Honda", 0);
+        car1.accelerate(20);
+        System.out.println(car1.speed + " " + car2.speed); // 20 0 — independent state
+    }
+}
 ```
 
-**Interview line:** *"A class defines structure and behavior; an object is a concrete instantiation with its own state in memory."*
+**Interview line:** "A class defines structure and behavior; an object is a concrete instantiation with its own state in memory."
 
-### 1.2 Constructor
+---
+
+### 1.2 Object Creation & Memory Basics
+
+- `new Car(...)` allocates memory on the **heap** and returns a **reference** (pointer-like) stored on the **stack**.
+- Object variables in Java always hold references, never the object itself.
+- Assigning one reference to another copies the reference, not the object — both variables point to the same object.
+
+```java
+Car a = new Car("Toyota", 0);
+Car b = a;          // b points to the SAME object as a
+b.speed = 50;
+System.out.println(a.speed); // 50 — because a and b reference the same memory
+```
+
+- Objects with no remaining references become eligible for **garbage collection**.
+- Primitives (`int`, `double`, `boolean`, etc.) are stored directly on the stack (or inline in the object), not as references.
+
+---
+
+### 1.3 Constructor
 
 Special method invoked automatically when an object is created. Used to initialize state.
-
-```python
-class Point:
-    def __init__(self, x=0, y=0):   # constructor
-        self.x = x
-        self.y = y
-```
 
 ```java
 public class Point {
     private int x, y;
-    public Point() { this(0, 0); }         // default constructor
-    public Point(int x, int y) {           // parameterized constructor
+
+    Point() {                  // default constructor
+        this(0, 0);
+    }
+
+    Point(int x, int y) {      // parameterized constructor
         this.x = x;
         this.y = y;
+    }
+
+    Point(Point other) {       // copy constructor (manual — Java has no built-in one)
+        this.x = other.x;
+        this.y = other.y;
     }
 }
 ```
 
-- **Default constructor** — no args, auto-provided by compiler if none defined (Java/C++).
+- **Default constructor** — no args; auto-provided by the compiler only if you define *no* constructor at all.
 - **Parameterized constructor** — accepts args to set initial state.
-- **Copy constructor** (C++) — builds an object from another object of the same class.
-
-### 1.3 Destructor — language dependent
-
-- **C++**: `~ClassName()` — called deterministically when object goes out of scope / `delete`d. Used for manual resource cleanup (RAII).
-- **Java/Python**: No deterministic destructor. Garbage collector reclaims memory.
-  - Python has `__del__` (finalizer) — but timing isn't guaranteed; not reliable for critical cleanup.
-  - Java has no destructor; `finalize()` is deprecated. Use `try-with-resources` / `AutoCloseable`.
-  - Python idiom: use context managers (`with` + `__enter__`/`__exit__`) instead of relying on `__del__`.
-
-```cpp
-class FileHandler {
-public:
-    FileHandler() { /* open file */ }
-    ~FileHandler() { /* close file - deterministic */ }
-};
-```
-
-```python
-class FileHandler:
-    def __enter__(self):
-        self.f = open("data.txt")
-        return self.f
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.f.close()   # deterministic cleanup, Pythonic replacement for destructor
-```
-
-**Interview line:** *"C++ has deterministic destructors tied to scope (RAII). Java/Python rely on GC, so cleanup of external resources (files, sockets, DB connections) is done via explicit patterns — try-with-resources in Java, context managers in Python — not destructors."*
-
-### 1.4 Instance Variables vs Class (Static) Variables
-
-```python
-class Employee:
-    company = "Coupa"          # class variable — shared across all instances
-
-    def __init__(self, name, salary):
-        self.name = name       # instance variable — unique per object
-        self.salary = salary
-
-e1 = Employee("Alice", 90000)
-e2 = Employee("Bob", 85000)
-Employee.company = "Coupa Inc"   # affects all instances
-print(e1.company, e2.company)    # Coupa Inc, Coupa Inc
-```
-
-### 1.5 Methods
-
-- **Instance method** — operates on `self`/`this`, can access instance state.
-- **Class method** (`@classmethod` / `static` factory) — operates on the class, not instance.
-- **Static method** — utility function, no access to instance or class state.
-
-```python
-class MathUtils:
-    @staticmethod
-    def square(n):
-        return n * n
-
-    @classmethod
-    def from_string(cls, s):
-        return cls(int(s))
-```
-
+- **Copy constructor** — Java doesn't auto-generate one (unlike C++); you write it yourself, or use `clone()`.
 
 ---
 
-## 2. THE FOUR PILLARS OF OOP
+### 1.4 Constructor Chaining
 
-### 2.1 Encapsulation
+Calling one constructor from another to avoid duplicated init logic.
 
-Bundling data + methods that operate on it into a single unit, and **restricting direct access** to internal state ("data hiding").
+```java
+class Vehicle {
+    String brand;
+    int wheels;
 
-```python
-class BankAccount:
-    def __init__(self, balance):
-        self.__balance = balance     # name-mangled -> "private"
+    Vehicle(String brand) {
+        this(brand, 4);              // chain to another constructor in same class
+    }
+    Vehicle(String brand, int wheels) {
+        this.brand = brand;
+        this.wheels = wheels;
+    }
+}
 
-    def deposit(self, amount):
-        if amount <= 0:
-            raise ValueError("amount must be positive")
-        self.__balance += amount
-
-    def get_balance(self):           # controlled access
-        return self.__balance
-
-acc = BankAccount(100)
-acc.deposit(50)
-print(acc.get_balance())    # 150
-# acc.__balance            # AttributeError-ish (name mangled) -> can't access directly
+class Car extends Vehicle {
+    String model;
+    Car(String brand, String model) {
+        super(brand);                // chain to parent constructor
+        this.model = model;
+    }
+}
 ```
+
+Rules: `this(...)` or `super(...)` must be the **first statement** in a constructor, and you can only call one of them (not both).
+
+---
+
+### 1.5 Destructor — Java Has None
+
+Java has no deterministic destructor. The Garbage Collector reclaims memory automatically.
+
+- `finalize()` — deprecated, timing not guaranteed, never rely on it.
+- Correct pattern for cleanup (files, sockets, DB connections): **try-with-resources** + `AutoCloseable`.
+
+```java
+class FileHandler implements AutoCloseable {
+    FileHandler() { System.out.println("opened"); }
+    @Override
+    public void close() { System.out.println("closed"); } // deterministic cleanup
+}
+
+try (FileHandler fh = new FileHandler()) {
+    // use fh
+} // close() called automatically here, even if an exception occurs
+```
+
+**Interview line:** "Java relies on GC for memory, so cleanup of external resources is done explicitly via try-with-resources / AutoCloseable, not destructors."
+
+---
+
+### 1.6 Pass-by-Value in Java
+
+Java is **always pass-by-value** — but for objects, the "value" being passed is the reference (memory address), which creates the illusion of pass-by-reference.
+
+```java
+void modify(Car c) {
+    c.speed = 100;      // mutates the SAME object — visible outside
+    c = new Car("BMW", 0); // reassigns local copy of reference — invisible outside
+}
+
+Car myCar = new Car("Toyota", 0);
+modify(myCar);
+System.out.println(myCar.brand + " " + myCar.speed); // Toyota 100
+```
+
+**Interview line:** "Java passes a copy of the reference. You can mutate the object it points to, but reassigning the parameter inside the method doesn't affect the caller's variable."
+
+---
+
+### 1.7 Instance Variables vs Static Variables, Instance vs Static Methods
+
+```java
+class Employee {
+    static String company = "Coupa";   // static — shared across ALL instances
+    String name;                       // instance — unique per object
+    double salary;
+
+    Employee(String name, double salary) {
+        this.name = name;
+        this.salary = salary;
+    }
+
+    void raiseSalary(double amt) {     // instance method — needs an object, uses `this`
+        salary += amt;
+    }
+
+    static void changeCompany(String newName) { // static method — no `this`, class-level
+        company = newName;
+    }
+}
+
+Employee e1 = new Employee("Alice", 90000);
+Employee e2 = new Employee("Bob", 85000);
+Employee.changeCompany("Coupa Inc");
+System.out.println(e1.company + " " + e2.company); // Coupa Inc Coupa Inc
+```
+
+| | Instance | Static |
+|---|---|---|
+| Belongs to | Each object | The class itself |
+| Memory | One copy per object | One copy total |
+| Access | Needs an object (`obj.field`) | `ClassName.field` |
+| Can use `this` | Yes | No |
+| Access instance members | Yes | No (unless given an object) |
+
+---
+
+### 1.8 `this` vs `super`
+
+- `this` — reference to the current object; disambiguates fields from parameters, chains constructors.
+- `super` — reference to the parent class; calls parent's constructor or an overridden parent method explicitly.
+
+```java
+class Animal {
+    String name;
+    Animal(String name) { this.name = name; }
+    String speak() { return "generic sound"; }
+}
+
+class Dog extends Animal {
+    String breed;
+    Dog(String name, String breed) {
+        super(name);                    // call parent constructor
+        this.breed = breed;
+    }
+    @Override
+    String speak() {
+        String parentSound = super.speak(); // call parent's overridden method
+        return parentSound + ", but really: Woof";
+    }
+}
+```
+
+---
+
+## 2. COPYING OBJECTS
+
+### 2.1 Shallow Copy vs Deep Copy
+
+- **Shallow copy** — copies the object, but nested object fields still point to the *same* referenced objects as the original.
+- **Deep copy** — copies the object *and* recursively copies every nested object too, so the two are fully independent.
+
+```java
+class Engine {
+    int hp;
+    Engine(int hp) { this.hp = hp; }
+}
+
+class Car implements Cloneable {
+    String brand;
+    Engine engine;
+
+    Car(String brand, Engine engine) {
+        this.brand = brand;
+        this.engine = engine;
+    }
+
+    // Shallow copy — default Object.clone() behavior
+    @Override
+    protected Car clone() throws CloneNotSupportedException {
+        return (Car) super.clone();   // copies brand + engine REFERENCE, not a new Engine
+    }
+
+    // Deep copy — manual
+    Car deepClone() {
+        Engine newEngine = new Engine(this.engine.hp); // new independent Engine object
+        return new Car(this.brand, newEngine);
+    }
+}
+
+Car original = new Car("Toyota", new Engine(150));
+
+Car shallow = original.clone();
+shallow.engine.hp = 999;
+System.out.println(original.engine.hp); // 999 — SAME engine object, original affected!
+
+Car deep = original.deepClone();
+deep.engine.hp = 1;
+System.out.println(original.engine.hp); // still 999 — untouched, fully independent
+```
+
+**Interview line:** "Shallow copy duplicates the top-level object only; nested references are shared. Deep copy recursively duplicates nested objects so the copy is fully independent."
+
+---
+
+## 3. THE FOUR PILLARS OF OOP
+
+### 3.1 Encapsulation
+
+Bundling data + methods into a single unit, restricting direct access to internal state ("data hiding").
 
 ```java
 public class BankAccount {
-    private double balance;      // hidden
+    private double balance;              // hidden
+
     public void deposit(double amt) {
-        if (amt <= 0) throw new IllegalArgumentException();
+        if (amt <= 0) throw new IllegalArgumentException("amount must be positive");
         balance += amt;
     }
-    public double getBalance() { return balance; }   // getter — controlled access
+
+    public double getBalance() {         // controlled access via getter
+        return balance;
+    }
 }
 ```
 
 **Data hiding vs Encapsulation:**
-- Encapsulation = bundling data + behavior together (a broader OOP concept).
-- Data hiding = the *access-restriction* mechanism (private fields + getters/setters) that enforces encapsulation. Data hiding is a technique that helps achieve encapsulation.
+- Encapsulation = bundling data + behavior together (the broader OOP concept).
+- Data hiding = the access-restriction mechanism (`private` fields + getters/setters) that *enforces* encapsulation.
 
-**Access Modifiers**
+#### 3.1.1 Immutable Class
 
-| Modifier | Java | Python (convention) | Meaning |
-|---|---|---|---|
-| public | `public` | `name` | accessible everywhere |
-| protected | `protected` | `_name` (single underscore, convention only) | accessible in class + subclasses (+ package in Java) |
-| private | `private` | `__name` (name-mangled, not true private) | accessible only within class |
-| package-private | (default, no modifier) | N/A | accessible within same package (Java only) |
-
-Python has **no true enforced access modifiers** — everything is accessible; underscores are conventions (`_protected`, `__private` triggers name mangling to `_ClassName__private`, mainly to avoid subclass name clashes, not real security).
-
-### 2.2 Abstraction
-
-Exposing only relevant behavior, hiding implementation detail. Achieved via **abstract classes** and **interfaces**.
-
-```python
-from abc import ABC, abstractmethod
-
-class Shape(ABC):                      # abstract class
-    @abstractmethod
-    def area(self):                    # abstract method — no implementation
-        pass
-
-    def describe(self):                # concrete method — shared implementation
-        return f"This shape has area {self.area()}"
-
-class Circle(Shape):
-    def __init__(self, r):
-        self.r = r
-    def area(self):
-        return 3.14159 * self.r ** 2
-
-# Shape()          -> TypeError: Can't instantiate abstract class
-c = Circle(5)
-print(c.describe())
-```
+An object whose state cannot change after construction. Rules:
+1. Make the class `final` (can't be subclassed to add mutability).
+2. Make all fields `private final`.
+3. No setters.
+4. If a field is a mutable object (e.g. a `List` or `Date`), return a **defensive copy** from the getter, not the original.
 
 ```java
-// Abstract class
+public final class ImmutablePoint {
+    private final int x;
+    private final int y;
+
+    public ImmutablePoint(int x, int y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    public int getX() { return x; }
+    public int getY() { return y; }
+
+    // "Modifying" returns a NEW object instead of mutating this one
+    public ImmutablePoint withX(int newX) {
+        return new ImmutablePoint(newX, this.y);
+    }
+}
+```
+
+#### 3.1.2 Why `String` Is Immutable in Java
+
+- **Security** — Strings are used for class names, file paths, network connections, DB URLs; if mutable, code could change a String after a security check (TOCTOU attack).
+- **String pool / caching** — the JVM interns String literals in a shared pool; if Strings were mutable, changing one variable would corrupt the value seen by every other variable pointing at the same pooled literal.
+- **Thread safety** — immutable objects are automatically safe to share across threads with no synchronization.
+- **Hashcode caching** — `String.hashCode()` is computed once and cached, safe because the value never changes; this makes Strings fast, reliable `HashMap` keys.
+
+```java
+String s1 = "hello";
+String s2 = s1;
+s1 = s1 + " world";     // creates a NEW String object; does not mutate the original
+System.out.println(s1); // hello world
+System.out.println(s2); // hello — s2 still points to the original, untouched
+```
+
+---
+
+### 3.2 Abstraction
+
+Exposing only relevant behavior, hiding implementation detail. Achieved via abstract classes and interfaces.
+
+```java
 abstract class Shape {
-    abstract double area();                 // no body
-    void describe() {                       // concrete method allowed
+    abstract double area();                 // abstract — no body, must be implemented
+
+    void describe() {                       // concrete — shared implementation
         System.out.println("Area: " + area());
     }
 }
 
-// Interface
-interface Drawable {
-    void draw();                            // implicitly public abstract
-}
-
-class Circle extends Shape implements Drawable {
+class Circle extends Shape {
     double r;
     Circle(double r) { this.r = r; }
+
+    @Override
     double area() { return Math.PI * r * r; }
-    public void draw() { System.out.println("Drawing circle"); }
 }
+
+// Shape s = new Shape(); // COMPILE ERROR — can't instantiate an abstract class
+Circle c = new Circle(5);
+c.describe(); // Area: 78.53...
 ```
 
-### 2.3 Inheritance
+---
+
+### 3.3 Inheritance
 
 A class (child/derived) acquires properties & behavior of another (parent/base).
 
-```python
-class Animal:
-    def __init__(self, name):
-        self.name = name
-    def speak(self):
-        return "..."
+```java
+class Animal {
+    String name;
+    Animal(String name) { this.name = name; }
+    String speak() { return "..."; }
+}
 
-class Dog(Animal):                 # single inheritance
-    def speak(self):
-        return f"{self.name} says Woof"
+class Dog extends Animal {                  // single inheritance
+    Dog(String name) { super(name); }
+    @Override
+    String speak() { return name + " says Woof"; }
+}
 
-class Puppy(Dog):                  # multilevel inheritance (Animal -> Dog -> Puppy)
-    def speak(self):
-        return f"{self.name} yips"
+class Puppy extends Dog {                   // multilevel: Animal -> Dog -> Puppy
+    Puppy(String name) { super(name); }
+    @Override
+    String speak() { return name + " yips"; }
+}
 
-class Cat(Animal):
-    def speak(self):
-        return f"{self.name} says Meow"
-# Animal -> Dog, Cat  is HIERARCHICAL inheritance (one parent, many children)
+class Cat extends Animal {                  // hierarchical: Animal -> Dog, Cat
+    Cat(String name) { super(name); }
+    @Override
+    String speak() { return name + " says Meow"; }
+}
 ```
 
 **Types:**
-- **Single** — one base, one derived (`Dog extends Animal`)
-- **Multilevel** — chain: `Animal -> Dog -> Puppy`
-- **Hierarchical** — one base, multiple derived classes (`Dog`, `Cat` both extend `Animal`)
-- **Multiple inheritance — language dependent**
-  - Python: supported directly (uses **MRO** — Method Resolution Order / C3 linearization to resolve conflicts).
-  - Java/C#: NOT supported for classes (avoids the "Diamond Problem"); achieved via **multiple interface implementation** instead.
-  - C++: supported directly, but you must manually resolve ambiguity (virtual inheritance to solve diamond problem).
+- **Single** — one base, one derived (`Dog extends Animal`).
+- **Multilevel** — chain: `Animal -> Dog -> Puppy`.
+- **Hierarchical** — one base, multiple derived classes (`Dog`, `Cat` both extend `Animal`).
+- **Multiple inheritance (of classes)** — **not supported in Java** (avoids the Diamond Problem). Achieved instead via implementing multiple interfaces.
 
-```python
-class Flyer:
-    def move(self): return "flying"
-class Swimmer:
-    def move(self): return "swimming"
-class Duck(Flyer, Swimmer):      # multiple inheritance
-    pass
-print(Duck().move())    # "flying" -> resolved via MRO (left-to-right)
-print(Duck.__mro__)
+#### 3.3.1 Upcasting vs Downcasting
+
+- **Upcasting** — treating a child object as its parent type. Always safe, done implicitly.
+- **Downcasting** — treating a parent-typed reference back as a child type. Not always safe; must be explicit, and can throw `ClassCastException` at runtime.
+
+```java
+Animal a = new Dog("Rex");          // upcasting — implicit, always safe
+System.out.println(a.speak());      // "Rex says Woof" — dynamic dispatch still picks Dog's method
+
+if (a instanceof Dog) {             // check before downcasting
+    Dog d = (Dog) a;                // downcasting — explicit cast required
+    System.out.println(d.name);
+}
+
+Animal cat = new Cat("Tom");
+Dog wrong = (Dog) cat;              // compiles, but throws ClassCastException at runtime
 ```
 
-```cpp
-// Diamond problem in C++
-class A { public: void hello() { cout << "A"; } };
-class B : public A {};
-class C : public A {};
-class D : public B, public C {};   // ambiguous: D has two copies of A
-// Fix: class B : virtual public A {}; class C : virtual public A {};
-```
+---
 
-### 2.4 Polymorphism
+### 3.4 Polymorphism
 
 "Many forms" — same interface, different underlying implementation.
 
-**Compile-time (static) polymorphism — Method Overloading**
-Same method name, different signature (params), resolved at compile time. Python doesn't support true overloading (last definition wins); simulate with default args / `*args` / `functools.singledispatch`.
+#### 3.4.1 Compile-time (static) polymorphism — Method Overloading
+
+Same method name, different parameter list, resolved at compile time.
 
 ```java
 class Calculator {
@@ -285,266 +445,667 @@ class Calculator {
 }
 ```
 
-```python
-from functools import singledispatch
+#### 3.4.2 Runtime (dynamic) polymorphism — Method Overriding
 
-@singledispatch
-def add(a, b):
-    return a + b   # simulated overloading in Python
-```
-
-**Runtime (dynamic) polymorphism — Method Overriding**
-Subclass redefines a method from the parent with the *same signature*; resolved at runtime via **dynamic dispatch** (vtable lookup).
-
-```python
-class Shape:
-    def area(self):
-        return 0
-
-class Rectangle(Shape):
-    def __init__(self, w, h):
-        self.w, self.h = w, h
-    def area(self):                 # override
-        return self.w * self.h
-
-class Circle(Shape):
-    def __init__(self, r):
-        self.r = r
-    def area(self):                 # override
-        return 3.14159 * self.r ** 2
-
-shapes = [Rectangle(3, 4), Circle(5)]
-for s in shapes:
-    print(s.area())    # calls the correct overridden method at runtime
-```
+Subclass redefines a parent method with the **same signature**; resolved at runtime via dynamic dispatch.
 
 ```java
-Shape s = new Circle(5);   // reference type Shape, actual object Circle
-s.area();                  // JVM resolves to Circle.area() at RUNTIME (dynamic dispatch via vtable)
+class Shape {
+    double area() { return 0; }
+}
+class Rectangle extends Shape {
+    double w, h;
+    Rectangle(double w, double h) { this.w = w; this.h = h; }
+    @Override
+    double area() { return w * h; }
+}
+class Circle extends Shape {
+    double r;
+    Circle(double r) { this.r = r; }
+    @Override
+    double area() { return Math.PI * r * r; }
+}
+
+Shape[] shapes = { new Rectangle(3, 4), new Circle(5) };
+for (Shape s : shapes) {
+    System.out.println(s.area());   // correct overridden version called at runtime
+}
 ```
 
-**Overloading vs Overriding — quick table**
+**Overloading vs Overriding**
 
 | | Overloading | Overriding |
 |---|---|---|
 | Binding | Compile-time (static) | Runtime (dynamic) |
-| Where | Same class (or subclass with covariant use) | Parent–child relationship |
+| Where | Same class | Parent–child relationship |
 | Signature | Must differ (params/types/arity) | Must be identical |
 | Return type | Can differ | Must be same or covariant |
-| Purpose | Convenience / same operation on different inputs | Specialize/replace inherited behavior |
+| Purpose | Same operation, different inputs | Specialize/replace inherited behavior |
 
+#### 3.4.3 Method Hiding vs Overriding
+
+- **Overriding** applies to **instance methods** — resolved at runtime based on the actual object type.
+- **Method hiding** applies to **static methods** — a subclass can declare a static method with the same signature, but it's resolved at **compile time** based on the reference type, not overridden.
+
+```java
+class Parent {
+    static void staticMethod() { System.out.println("Parent static"); }
+    void instanceMethod() { System.out.println("Parent instance"); }
+}
+class Child extends Parent {
+    static void staticMethod() { System.out.println("Child static"); }   // HIDING
+    @Override
+    void instanceMethod() { System.out.println("Child instance"); }      // OVERRIDING
+}
+
+Parent p = new Child();
+p.staticMethod();     // "Parent static" — resolved by reference type (Parent) at compile time
+p.instanceMethod();   // "Child instance" — resolved by actual object type at runtime
+```
+
+#### 3.4.4 Early Binding vs Late Binding
+
+- **Early (static) binding** — method call resolved at **compile time**: applies to overloaded methods, `static`, `final`, `private` methods.
+- **Late (dynamic) binding** — method call resolved at **runtime**, based on the actual object: applies to overridden instance methods (default in Java for non-static/non-final/non-private methods).
+
+```java
+Parent ref = new Child();
+ref.staticMethod();    // early binding — decided by compiler using reference type
+ref.instanceMethod();  // late binding — decided by JVM using actual object type (vtable lookup)
+```
+
+**Interview line:** "In Java, every non-static, non-final, non-private method is virtual by default and uses late binding. Static, final, and private methods, plus all overloaded calls, use early binding."
 
 ---
 
-## 3. DEEP OOP — MUST KNOW COLD
+## 4. DEEP OOP — MUST KNOW COLD
 
-### 3.1 Abstract Class vs Interface
+### 4.1 Abstract Class vs Interface
 
 | | Abstract Class | Interface |
 |---|---|---|
-| Methods | Can have abstract + concrete methods | Traditionally all abstract (Java 8+ allows `default`/`static` methods) |
-| State | Can have instance variables/state | No instance state (only constants, `public static final`) |
-| Constructor | Can have a constructor | No constructor |
-| Inheritance | Single inheritance (`extends` one class) | A class can implement **multiple** interfaces |
-| Access modifiers | Any (`public`/`protected`/`private` members) | Members implicitly `public` |
-| When to use | "IS-A" relationship + shared code/state to reuse | "CAN-DO" / capability contract, especially across unrelated classes |
+| Methods | Abstract + concrete methods | Traditionally all abstract; Java 8+ allows `default`/`static` methods |
+| State | Can have instance variables | No instance state (only `public static final` constants) |
+| Constructor | Can have one | Cannot have one |
+| Inheritance | Single (`extends` one class) | A class can `implement` many interfaces |
+| Access modifiers | Any (`public`/`protected`/`private`) | Members implicitly `public` |
+| Use when | Shared code/state + true IS-A hierarchy | A capability/contract across unrelated classes |
 
 ```java
-interface Payable { double calculatePay(); }
-interface Taxable { double calculateTax(); }
+interface Payable {
+    double calculatePay();
+}
 
-abstract class Employee implements Payable, Taxable {   // abstract class + multiple interfaces
+abstract class Employee implements Payable {
     protected String name;
-    Employee(String name) { this.name = name; }         // abstract classes CAN have constructors
-    abstract double calculatePay();                       // still abstract
+    Employee(String name) { this.name = name; }   // abstract classes CAN have constructors
+    abstract double calculatePay();                // still abstract
     double calculateTax() { return calculatePay() * 0.2; } // shared concrete implementation
+}
+
+class Manager extends Employee {
+    Manager(String name) { super(name); }
+    @Override
+    double calculatePay() { return 100000; }
 }
 ```
 
-**Interview soundbite:** *"Use an abstract class when subclasses share common state/behavior and there's a true IS-A hierarchy. Use an interface when you need a contract that unrelated classes can implement — Java doesn't allow multiple class inheritance, so interfaces are how you get multiple-inheritance-like behavior."*
+**Interview line:** "Use an abstract class when subclasses share state/behavior in a true IS-A hierarchy. Use an interface for a contract unrelated classes can implement — Java doesn't allow multiple class inheritance, so interfaces give multiple-inheritance-like behavior."
 
-### 3.2 Composition vs Inheritance ("favor composition over inheritance")
+---
 
-- **Inheritance (IS-A)** — tight coupling, subclass depends on parent's implementation, can break with parent changes (fragile base class problem).
-- **Composition (HAS-A)** — object contains references to other objects and delegates work to them; more flexible, swappable at runtime, avoids deep/fragile hierarchies.
+### 4.2 Interface Default & Static Methods (Java 8+)
 
-```python
-# Inheritance approach - rigid
-class Engine:
-    def start(self): return "Engine starting"
+- **`default` method** — gives an interface a concrete body; implementing classes inherit it automatically but may override it.
+- **`static` method** — belongs to the interface itself, called as `InterfaceName.method()`, cannot be overridden by implementers.
 
-class Car(Engine):     # WRONG - Car IS-NOT-A Engine
-    pass
+```java
+interface Vehicle {
+    void drive();
 
-# Composition approach - correct
-class Car:
-    def __init__(self, engine):
-        self.engine = engine     # Car HAS-A Engine
-    def start(self):
-        return self.engine.start()
+    default void honk() {                     // default method — has a body
+        System.out.println("Beep beep!");
+    }
 
-petrol_engine = Engine()
-car = Car(petrol_engine)
-print(car.start())
+    static Vehicle createDefault() {           // static method — factory-style utility
+        return () -> System.out.println("Driving default vehicle");
+    }
+}
+
+class Car implements Vehicle {
+    @Override
+    public void drive() { System.out.println("Car driving"); }
+    // honk() inherited for free, or could be overridden
+}
+
+Vehicle v = new Car();
+v.honk();                          // "Beep beep!" — inherited default
+Vehicle.createDefault().drive();   // called directly on the interface
 ```
 
-Strategy pattern is a classic example of composition beating inheritance: instead of subclassing for every behavior variant, inject a behavior object.
+Default methods were added so interfaces could evolve (add new methods) without breaking every existing implementing class.
 
-### 3.3 Association, Aggregation, Composition (UML relationship strength)
+---
 
-All three describe **object relationships** ("HAS-A" family), differing in **ownership** and **lifecycle**:
+### 4.3 Multiple Interfaces
 
-1. **Association** — general relationship; objects know about each other, no ownership. Can be 1:1, 1:many, many:many. Independent lifecycles.
-   ```python
-   class Teacher:
-       pass
-   class Student:
-       def __init__(self, teacher):
-           self.teacher = teacher   # association: Student "uses" a Teacher, no ownership
-   ```
+A single class can implement many interfaces — Java's answer to multiple inheritance.
 
-2. **Aggregation** — "weak HAS-A". A whole contains parts, but parts can exist independently and can outlive the whole / be shared across wholes.
-   ```python
-   class Department:
-       def __init__(self):
-           self.professors = []       # Department HAS Professors
-       def add(self, prof):
-           self.professors.append(prof)
+```java
+interface Flyer {
+    default String move() { return "flying"; }
+}
+interface Swimmer {
+    default String move() { return "swimming"; }
+}
 
-   class Professor:
-       def __init__(self, name):
-           self.name = name
+class Duck implements Flyer, Swimmer {
+    @Override
+    public String move() {          // MUST override — resolves the ambiguity yourself
+        return Flyer.super.move() + " and " + Swimmer.super.move();
+    }
+}
+```
 
-   p = Professor("Dr. Rao")
-   dept = Department()
-   dept.add(p)
-   # if dept is deleted, Professor p still exists independently (could join another dept)
-   ```
+If two interfaces provide the same `default` method, the implementing class is **forced to override it** and resolve the conflict explicitly (unlike Python's automatic MRO resolution) — this is how Java avoids the diamond problem.
 
-3. **Composition** — "strong HAS-A". Whole *owns* the parts; parts' lifecycle is bound to the whole — when the whole is destroyed, parts are destroyed too.
-   ```python
-   class Heart:
-       def beat(self): return "thump"
+---
 
-   class Human:
-       def __init__(self):
-           self.heart = Heart()    # Heart created and destroyed with Human — no Human, no this Heart
-   ```
+### 4.4 Composition vs Inheritance ("favor composition over inheritance")
 
-**Strength ranking:** Association (weakest) → Aggregation → Composition (strongest, ownership + shared lifecycle).
+- **Inheritance (IS-A)** — tight coupling; subclass depends on parent's implementation details; can break with parent changes (fragile base class problem).
+- **Composition (HAS-A)** — an object holds references to other objects and delegates work to them; flexible, swappable at runtime.
 
-### 3.4 static
+```java
+// Inheritance approach — WRONG, Car is-not-an Engine
+class Engine {
+    String start() { return "Engine starting"; }
+}
+class BadCar extends Engine { }
 
-Belongs to the **class**, not any instance. Shared across all objects, exists without instantiation.
+// Composition approach — correct, Car HAS-A Engine
+class Car {
+    private Engine engine;
+    Car(Engine engine) { this.engine = engine; }
+    String start() { return engine.start(); }
+}
+
+Car car = new Car(new Engine());
+System.out.println(car.start());
+```
+
+The **Strategy pattern** is a classic example: instead of subclassing for every behavior variant, you inject a behavior object.
+
+---
+
+### 4.5 Association, Aggregation, Composition (with lifecycle code)
+
+All three describe "HAS-A" relationships; they differ in **ownership** and **lifecycle**.
+
+- **Association** — general relationship, objects know about each other, no ownership, independent lifecycles.
+- **Aggregation** — "weak HAS-A". A whole contains parts, but the parts can exist independently and outlive the whole.
+- **Composition** — "strong HAS-A". The whole owns the parts; parts' lifecycle is bound to the whole — destroy the whole, and the parts are destroyed too.
+
+```java
+// ASSOCIATION — Student just "uses" a Teacher; neither owns the other
+class Teacher {
+    String name;
+    Teacher(String name) { this.name = name; }
+}
+class Student {
+    Teacher teacher;                      // association — no ownership
+    Student(Teacher teacher) { this.teacher = teacher; }
+}
+
+// AGGREGATION — Department has Professors, but Professors exist independently
+class Professor {
+    String name;
+    Professor(String name) { this.name = name; }
+}
+class Department {
+    List<Professor> professors = new ArrayList<>();
+    void add(Professor p) { professors.add(p); }   // Professor created OUTSIDE, just referenced
+}
+Professor rao = new Professor("Dr. Rao");
+Department cs = new Department();
+cs.add(rao);
+// if `cs` is discarded, `rao` still exists independently and could join another department
+
+// COMPOSITION — Heart is created and dies WITH the Human; no independent lifecycle
+class Heart {
+    String beat() { return "thump"; }
+}
+class Human {
+    private final Heart heart = new Heart();   // Heart created INSIDE, owned exclusively
+    String heartbeat() { return heart.beat(); }
+}
+// when a Human object is garbage collected, its Heart is collected too — no external reference exists
+```
+
+**Strength ranking:** Association (weakest) → Aggregation → Composition (strongest, exclusive ownership + shared lifecycle).
+
+---
+
+### 4.6 `static` Keyword
+
+Belongs to the class, not any instance. Shared across all objects, exists without instantiation.
 
 ```java
 class Counter {
-    static int count = 0;             // one copy shared by all instances
+    static int count = 0;                    // one copy shared by all instances
     Counter() { count++; }
-    static int getCount() { return count; }   // static method: can't use `this`
+    static int getCount() { return count; }   // static method — can't use `this`
 }
-new Counter(); new Counter();
+new Counter();
+new Counter();
 System.out.println(Counter.getCount());  // 2
 ```
 
-### 3.5 final (Java) / const-ness concepts
+---
 
-- `final` **variable** — value can't be reassigned after initialization (constant).
-- `final` **method** — cannot be overridden by subclasses.
-- `final` **class** — cannot be subclassed at all (e.g. `String`, `Integer` in Java).
+### 4.7 `final` Keyword
+
+- **`final` variable** — value can't be reassigned after initialization (constant).
+- **`final` method** — cannot be overridden by subclasses.
+- **`final` class** — cannot be subclassed at all (e.g. `String`, `Integer`).
 
 ```java
-final class ImmutablePoint {              // can't be extended
-    private final int x, y;               // can't be reassigned after constructor
+final class ImmutablePoint {               // can't be extended
+    private final int x, y;                // can't be reassigned after constructor
     ImmutablePoint(int x, int y) { this.x = x; this.y = y; }
-    final int getX() { return x; }        // can't be overridden (redundant here since class is final)
+    final int getX() { return x; }         // can't be overridden (redundant since class is final)
 }
 ```
 
-Python has no true `final` (convention: `Final[int]` type hint via `typing`, not enforced at runtime).
+#### 4.7.1 `final` vs `finally` vs `finalize`
 
-### 3.6 Virtual Functions & Dynamic Dispatch
-
-- **Virtual function** (C++ term) — a member function you expect to be overridden; declared with `virtual` so the call is resolved via the object's **actual type at runtime**, not the pointer/reference's declared type.
-- Without `virtual`, C++ uses **static binding** (resolved at compile time based on declared type) — this is a classic interview gotcha.
-
-```cpp
-class Animal {
-public:
-    virtual void speak() { cout << "..."; }     // virtual -> dynamic dispatch
-    void nonVirtual() { cout << "base"; }        // NOT virtual -> static binding
-};
-class Dog : public Animal {
-public:
-    void speak() override { cout << "Woof"; }
-    void nonVirtual() { cout << "derived"; }
-};
-
-Animal* a = new Dog();
-a->speak();       // "Woof" -> virtual, dynamic dispatch based on actual object type
-a->nonVirtual();  // "base" -> NOT virtual, static binding based on pointer type Animal*
-```
-
-- Java: **all non-static, non-final, non-private methods are virtual by default** — always dynamic dispatch.
-- Python: everything is dynamically dispatched by default (duck typing), no `virtual` keyword needed.
-
-**Mechanism:** implemented via a **vtable** (virtual method table) — each object with virtual methods carries a pointer to a table of function pointers; the runtime looks up the correct implementation through that table based on the object's real class.
-
-### 3.7 Constructor Chaining
-
-Calling one constructor from another — either within the same class (overloaded constructors) or from a subclass to its parent — to avoid duplicated init logic.
+| | `final` | `finally` | `finalize()` |
+|---|---|---|---|
+| What it is | Keyword/modifier | Block in try-catch | Method on `Object` |
+| Purpose | Prevent reassignment/override/subclassing | Code that ALWAYS runs after try/catch, used for cleanup | Called by GC before reclaiming an object (deprecated) |
+| Used on | Variables, methods, classes | try-catch-finally structure | Overridden in a class |
+| Guaranteed to run? | N/A | Yes (except `System.exit()` or JVM crash) | No — timing/occurrence not guaranteed |
 
 ```java
-class Vehicle {
-    String brand; int wheels;
-    Vehicle(String brand) { this(brand, 4); }              // chain to another ctor in same class via this()
-    Vehicle(String brand, int wheels) {
-        this.brand = brand; this.wheels = wheels;
-    }
-}
-class Car extends Vehicle {
-    String model;
-    Car(String brand, String model) {
-        super(brand);          // chain to parent constructor via super()
-        this.model = model;
-    }
+try {
+    riskyOperation();
+} catch (Exception e) {
+    System.out.println("caught: " + e.getMessage());
+} finally {
+    System.out.println("always runs — cleanup here");
 }
 ```
 
-```python
-class Vehicle:
-    def __init__(self, brand, wheels=4):
-        self.brand = brand
-        self.wheels = wheels
+---
 
-class Car(Vehicle):
-    def __init__(self, brand, model):
-        super().__init__(brand)      # constructor chaining to parent via super()
-        self.model = model
+### 4.8 Virtual Functions & Dynamic Dispatch in Java
+
+Java has no `virtual` keyword — **every non-static, non-final, non-private method is virtual by default** and uses dynamic dispatch automatically.
+
+```java
+class Animal {
+    void speak() { System.out.println("..."); }        // implicitly virtual
+    final void nonOverridable() { System.out.println("base"); } // final -> NOT virtual
+}
+class Dog extends Animal {
+    @Override
+    void speak() { System.out.println("Woof"); }
+    // cannot override nonOverridable() — compile error
+}
+
+Animal a = new Dog();
+a.speak();             // "Woof" — dynamic dispatch based on actual object type (Dog)
 ```
 
-### 3.8 `this` / `self` vs `super`
+**Mechanism:** implemented via a **vtable** (virtual method table) — each object carries a pointer to a table of method implementations; the JVM looks up the correct implementation through that table based on the object's real class at runtime.
 
-- `this` (Java/C++) / `self` (Python, explicit first param) — reference to the **current object instance**; disambiguates instance fields from parameters, used to call other constructors (`this(...)`) or pass current object around.
-- `super` — reference to the **parent class**; used to call parent's constructor (`super(...)`) or explicitly invoke an overridden parent method (`super.method()` / `super().method()`).
+---
 
-```python
-class Animal:
-    def __init__(self, name):
-        self.name = name
-    def speak(self):
-        return "generic sound"
+## 5. THE `Object` CLASS & CORE METHODS
 
-class Dog(Animal):
-    def __init__(self, name, breed):
-        super().__init__(name)          # call parent constructor
-        self.breed = breed
-    def speak(self):
-        parent_sound = super().speak()  # call parent's overridden method explicitly
-        return f"{parent_sound}, but really: Woof"
+Every class in Java implicitly extends `Object`, which provides `equals()`, `hashCode()`, `toString()`, `clone()`, `getClass()`, `wait()`/`notify()`, etc.
+
+### 5.1 `==` vs `.equals()`
+
+- **`==`** — compares references (memory addresses) for objects; compares actual values for primitives.
+- **`.equals()`** — compares logical/content equality; default `Object.equals()` behaves like `==` unless overridden (as `String`, `Integer`, etc. do).
+
+```java
+String s1 = new String("hello");
+String s2 = new String("hello");
+
+System.out.println(s1 == s2);         // false — different objects in memory
+System.out.println(s1.equals(s2));    // true — same content
+
+int x = 5, y = 5;
+System.out.println(x == y);           // true — primitives compare by value
 ```
 
+### 5.2 `equals()` vs `hashCode()`
 
+The **contract**: if two objects are equal via `.equals()`, they **must** return the same `hashCode()`. Breaking this contract silently corrupts hash-based collections (`HashMap`, `HashSet`).
+
+```java
+class Point {
+    int x, y;
+    Point(int x, int y) { this.x = x; this.y = y; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Point)) return false;
+        Point p = (Point) o;
+        return x == p.x && y == p.y;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(x, y);      // must match equals() logic
+    }
+}
+
+Set<Point> set = new HashSet<>();
+set.add(new Point(1, 2));
+System.out.println(set.contains(new Point(1, 2))); // true — only works because BOTH are overridden correctly
+```
+
+**Interview line:** "If you override `equals()` without `hashCode()`, two 'equal' objects can land in different hash buckets, so `HashSet`/`HashMap` will treat them as different — always override both together."
+
+---
+
+## 6. ACCESS MODIFIERS (Java)
+
+| Modifier | Class | Package | Subclass (diff package) | World |
+|---|---|---|---|---|
+| `public` | Yes | Yes | Yes | Yes |
+| `protected` | Yes | Yes | Yes | No |
+| *(default / package-private)* | Yes | Yes | No | No |
+| `private` | Yes | No | No | No |
+
+```java
+public class Account {
+    private double balance;         // only this class
+    protected String owner;         // this class + package + subclasses
+    String branch;                  // package-private (default) — only same package
+    public String accountId;        // accessible everywhere
+}
+```
+
+---
+
+## 7. DESIGN PRINCIPLES
+
+### 7.1 Coupling & Cohesion
+
+- **Coupling** — how much one class/module depends on the internal details of another. **Low coupling** is desirable (classes interact through clean interfaces, not internals).
+- **Cohesion** — how focused a class/module is on a single responsibility. **High cohesion** is desirable (a class does one thing well).
+
+```java
+// LOW cohesion, HIGH coupling — bad
+class ReportManager {
+    void fetchData() { /* db logic */ }
+    void formatData() { /* formatting logic */ }
+    void sendEmail() { /* email logic */ }   // unrelated responsibility crammed in
+}
+
+// HIGH cohesion, LOW coupling — good: each class does one job, talks via interfaces
+class DataFetcher { void fetch() { } }
+class ReportFormatter { void format() { } }
+class EmailSender { void send() { } }
+```
+
+### 7.2 SOLID Principles
+
+| Letter | Principle | Meaning |
+|---|---|---|
+| **S** | Single Responsibility | A class should have only one reason to change |
+| **O** | Open/Closed | Open for extension, closed for modification |
+| **L** | Liskov Substitution | Subtypes must be substitutable for their base type without breaking behavior |
+| **I** | Interface Segregation | Prefer many small interfaces over one bloated one |
+| **D** | Dependency Inversion | Depend on abstractions, not concrete implementations |
+
+```java
+// O — Open/Closed: add new shapes WITHOUT modifying AreaCalculator
+interface Shape { double area(); }
+class Circle implements Shape {
+    double r;
+    Circle(double r) { this.r = r; }
+    public double area() { return Math.PI * r * r; }
+}
+class Square implements Shape {
+    double side;
+    Square(double side) { this.side = side; }
+    public double area() { return side * side; }
+}
+class AreaCalculator {
+    double totalArea(List<Shape> shapes) {
+        double total = 0;
+        for (Shape s : shapes) total += s.area();   // no changes needed for new shapes
+        return total;
+    }
+}
+```
+
+```java
+// L — Liskov Substitution VIOLATION example (classic gotcha)
+class Rectangle {
+    protected int w, h;
+    void setWidth(int w) { this.w = w; }
+    void setHeight(int h) { this.h = h; }
+    int area() { return w * h; }
+}
+class Square extends Rectangle {
+    @Override void setWidth(int w) { this.w = this.h = w; }   // breaks expected Rectangle behavior
+    @Override void setHeight(int h) { this.w = this.h = h; }
+}
+// Code that assumes "setWidth then setHeight gives independent w,h" breaks silently for Square
+```
+
+### 7.3 Dependency Injection (DI)
+
+Instead of a class creating its own dependencies, they're "injected" from outside (constructor, setter, or a DI framework like Spring) — reduces coupling, improves testability.
+
+```java
+interface PaymentService {
+    void pay(double amount);
+}
+class CreditCardService implements PaymentService {
+    public void pay(double amount) { System.out.println("Paid " + amount + " via card"); }
+}
+
+class Checkout {
+    private final PaymentService paymentService;
+
+    // constructor injection — dependency provided from OUTSIDE, not created internally
+    Checkout(PaymentService paymentService) {
+        this.paymentService = paymentService;
+    }
+
+    void completeOrder(double amount) {
+        paymentService.pay(amount);
+    }
+}
+
+Checkout checkout = new Checkout(new CreditCardService());  // easy to swap in a mock for testing
+checkout.completeOrder(99.99);
+```
+
+### 7.4 Dependency Inversion / Interface-Based Design
+
+High-level modules should not depend on low-level modules — both should depend on abstractions. This is the "D" in SOLID, and DI is the common technique used to achieve it.
+
+```java
+// WITHOUT inversion — high-level class depends directly on a concrete low-level class
+class MySQLDatabase {
+    void save(String data) { System.out.println("Saved to MySQL: " + data); }
+}
+class UserService {
+    private MySQLDatabase db = new MySQLDatabase();   // tightly coupled to MySQL specifically
+    void save(String data) { db.save(data); }
+}
+
+// WITH inversion — both depend on an abstraction
+interface Database {
+    void save(String data);
+}
+class MySQLDatabase2 implements Database {
+    public void save(String data) { System.out.println("Saved to MySQL: " + data); }
+}
+class MongoDatabase implements Database {
+    public void save(String data) { System.out.println("Saved to Mongo: " + data); }
+}
+class UserService2 {
+    private final Database db;
+    UserService2(Database db) { this.db = db; }        // depends on the interface, not a concrete DB
+    void save(String data) { db.save(data); }
+}
+// swap databases without touching UserService2 at all
+UserService2 service = new UserService2(new MongoDatabase());
+```
+
+---
+
+## 8. DESIGN PATTERNS
+
+### 8.1 Singleton — Basic Implementation
+
+Ensures a class has exactly **one instance**, with a global access point.
+
+```java
+class Singleton {
+    private static Singleton instance;   // holds the single instance
+
+    private Singleton() { }              // private constructor — no `new` from outside
+
+    public static synchronized Singleton getInstance() {  // synchronized = thread-safe
+        if (instance == null) {
+            instance = new Singleton();
+        }
+        return instance;
+    }
+}
+
+Singleton a = Singleton.getInstance();
+Singleton b = Singleton.getInstance();
+System.out.println(a == b); // true — same instance
+```
+
+For high-performance thread safety, the common upgrade is the **double-checked locking** or **eager initialization** (`private static final Singleton instance = new Singleton();`) or an `enum` singleton.
+
+---
+
+## 9. EXCEPTION HANDLING
+
+Java uses a class hierarchy: `Throwable` → `Exception` (checked) / `RuntimeException` (unchecked) → your custom exceptions.
+
+```java
+// Custom checked exception — caller MUST handle or declare it
+class InsufficientFundsException extends Exception {
+    InsufficientFundsException(String message) {
+        super(message);
+    }
+}
+
+class BankAccount {
+    private double balance;
+
+    void withdraw(double amount) throws InsufficientFundsException {
+        if (amount > balance) {
+            throw new InsufficientFundsException("Not enough balance");
+        }
+        balance -= amount;
+    }
+}
+
+try {
+    new BankAccount().withdraw(100);
+} catch (InsufficientFundsException e) {
+    System.out.println("Error: " + e.getMessage());
+} finally {
+    System.out.println("Transaction attempt finished");
+}
+```
+
+**Checked vs Unchecked:**
+
+| | Checked | Unchecked |
+|---|---|---|
+| Extends | `Exception` (not `RuntimeException`) | `RuntimeException` |
+| Compiler enforces handling | Yes — must `catch` or `throws` | No |
+| Example | `IOException`, custom business exceptions | `NullPointerException`, `ArrayIndexOutOfBoundsException` |
+| Typical use | Recoverable conditions caller should plan for | Programming bugs |
+
+---
+
+## 10. GENERICS
+
+Let classes/methods operate on types specified by the caller, with compile-time type safety (no casting, no `ClassCastException` surprises).
+
+```java
+class Box<T> {
+    private T content;
+    void set(T content) { this.content = content; }
+    T get() { return content; }
+}
+
+Box<String> stringBox = new Box<>();
+stringBox.set("hello");
+String s = stringBox.get();     // no cast needed, type-safe at compile time
+
+// Generic method
+static <T> T firstElement(List<T> list) {
+    return list.get(0);
+}
+
+// Bounded type parameter
+static <T extends Number> double sum(List<T> list) {
+    double total = 0;
+    for (T item : list) total += item.doubleValue();
+    return total;
+}
+```
+
+**Interview line:** "Generics give compile-time type safety and eliminate the need for manual casting; before Java 5, collections stored raw `Object`s and casts could fail at runtime."
+
+---
+
+## 11. COLLECTIONS & HOW OOP CONCEPTS APPLY
+
+The Collections Framework is a textbook example of OOP in practice:
+
+- **Abstraction/Polymorphism** — code programs to the `List`, `Set`, `Map` interfaces, not concrete classes (`ArrayList`, `HashSet`, `HashMap`), so implementations are swappable.
+- **Inheritance** — e.g. `ArrayList` implements `List`, which extends `Collection`, which extends `Iterable`.
+- **Encapsulation** — internal array/tree/hash-table structure is hidden behind a clean public API.
+
+```java
+List<String> names = new ArrayList<>();   // program to the interface
+names.add("Alice");
+names.add("Bob");
+
+names = new LinkedList<>();               // swap implementation — rest of code unchanged
+names.add("Carol");
+
+for (String name : names) {               // Iterable — polymorphic iteration
+    System.out.println(name);
+}
+```
+
+`equals()`/`hashCode()` correctness (Section 5.2) directly determines whether `HashSet`/`HashMap` behave correctly with custom objects as elements/keys.
+
+---
+
+## 12. COMMON OOP DESIGN / INTERVIEW QUESTIONS (Rapid Fire)
+
+- **Why can't we instantiate an abstract class?** — It may have unimplemented (abstract) methods with no body; calling them would have no defined behavior.
+- **Can a constructor be `private`?** — Yes, used in Singleton pattern and static factory methods to control instantiation.
+- **Can an interface have a constructor?** — No, interfaces cannot hold state to initialize.
+- **Can we override a `static` method?** — No, it's hidden, not overridden (see 3.4.3).
+- **Can we override a `private` method?** — No, private methods aren't visible to subclasses at all.
+- **What happens if a subclass doesn't implement all abstract methods?** — It must also be declared `abstract`, or it won't compile.
+- **Why does Java not support multiple inheritance of classes?** — To avoid the Diamond Problem (ambiguity over which parent's method/field wins); interfaces solve this because implementers must explicitly resolve conflicting `default` methods.
+- **Is Java "pass-by-reference"?** — No, always pass-by-value; see Section 1.6.
+- **Difference between `String`, `StringBuilder`, `StringBuffer`?** — `String` is immutable; `StringBuilder` is mutable and not thread-safe (faster); `StringBuffer` is mutable and thread-safe (synchronized, slower).
+- **What is the diamond problem, and how does Java handle it for interfaces?** — When a class implements two interfaces with the same `default` method, Java forces the class to override and explicitly resolve it (see 4.3).
 ---
 
 ## 4. OOP DESIGN (LOW-LEVEL DESIGN) ⭐⭐⭐⭐⭐
