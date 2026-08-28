@@ -1120,564 +1120,1865 @@ General approach for any LLD interview question:
 
 ---
 
-### 4.1 Parking Lot
+# LLD Coding Examples — Easy Java
 
-**Requirements (typical):** multiple floors, multiple spot types (compact/large/handicapped/motorcycle), entry generates a ticket, exit calculates payment, track availability.
+These are simplified Java versions suitable for a fresher technical interview.
 
-**Relationships:**
-- `ParkingLot` **has-many** `Floor` (composition — floors don't exist without the lot)
-- `Floor` **has-many** `ParkingSpot` (composition)
-- `ParkingSpot` **associated with** `Vehicle` when occupied (temporary association, not ownership)
-- `Ticket` **associates** a `Vehicle` with a `ParkingSpot` and entry time
-- `Payment` **associates** with a `Ticket`
-- `Vehicle` — base class, subclasses `Car`, `Motorcycle`, `Truck` (inheritance)
-- `ParkingSpot` — abstract-ish base with `SpotType` enum, or subclassed per type
+---
 
-```python
-from abc import ABC
-from enum import Enum
-from datetime import datetime
-import uuid
+# 1. Parking Lot
 
-class VehicleType(Enum):
-    MOTORCYCLE = 1
-    CAR = 2
-    TRUCK = 3
+## Requirements
 
-class SpotType(Enum):
-    MOTORCYCLE = 1
-    COMPACT = 2
-    LARGE = 3
-    HANDICAPPED = 4
+* Multiple floors
+* Different parking spots
+* Cars, motorcycles, trucks
+* Park vehicle
+* Generate ticket
+* Remove vehicle
+* Calculate fee
 
-class Vehicle(ABC):
-    def __init__(self, license_plate, vtype: VehicleType):
-        self.license_plate = license_plate
-        self.type = vtype
+## Main Classes
 
-class Car(Vehicle):
-    def __init__(self, plate): super().__init__(plate, VehicleType.CAR)
+```text
+ParkingLot
+    ↓
+Floor
+    ↓
+ParkingSpot
+    ↓
+Vehicle
+    ├── Car
+    ├── Motorcycle
+    └── Truck
 
-class Motorcycle(Vehicle):
-    def __init__(self, plate): super().__init__(plate, VehicleType.MOTORCYCLE)
+Ticket
+Payment
+```
 
-class Truck(Vehicle):
-    def __init__(self, plate): super().__init__(plate, VehicleType.TRUCK)
+## Code
 
+```java
+import java.util.*;
 
-class ParkingSpot:
-    def __init__(self, spot_id, spot_type: SpotType):
-        self.spot_id = spot_id
-        self.spot_type = spot_type
-        self.vehicle = None          # association when occupied
+enum VehicleType {
+    CAR,
+    MOTORCYCLE,
+    TRUCK
+}
 
-    def is_free(self):
-        return self.vehicle is None
+enum SpotType {
+    COMPACT,
+    LARGE,
+    MOTORCYCLE
+}
+```
 
-    def can_fit(self, vehicle: Vehicle):
-        compat = {
-            VehicleType.MOTORCYCLE: {SpotType.MOTORCYCLE, SpotType.COMPACT, SpotType.LARGE},
-            VehicleType.CAR: {SpotType.COMPACT, SpotType.LARGE},
-            VehicleType.TRUCK: {SpotType.LARGE},
+### Vehicle
+
+```java
+class Vehicle {
+
+    String number;
+    VehicleType type;
+
+    Vehicle(String number, VehicleType type) {
+        this.number = number;
+        this.type = type;
+    }
+}
+```
+
+### Car, Motorcycle, Truck
+
+```java
+class Car extends Vehicle {
+
+    Car(String number) {
+        super(number, VehicleType.CAR);
+    }
+}
+
+class Motorcycle extends Vehicle {
+
+    Motorcycle(String number) {
+        super(number, VehicleType.MOTORCYCLE);
+    }
+}
+
+class Truck extends Vehicle {
+
+    Truck(String number) {
+        super(number, VehicleType.TRUCK);
+    }
+}
+```
+
+### Parking Spot
+
+```java
+class ParkingSpot {
+
+    int id;
+    SpotType type;
+    Vehicle vehicle;
+
+    ParkingSpot(int id, SpotType type) {
+        this.id = id;
+        this.type = type;
+    }
+
+    boolean isFree() {
+        return vehicle == null;
+    }
+
+    boolean canFit(Vehicle vehicle) {
+
+        if (vehicle.type == VehicleType.MOTORCYCLE) {
+            return true;
         }
-        return self.spot_type in compat[vehicle.type]
 
-    def assign(self, vehicle):
-        self.vehicle = vehicle
+        if (vehicle.type == VehicleType.CAR) {
+            return type == SpotType.COMPACT ||
+                   type == SpotType.LARGE;
+        }
 
-    def remove(self):
-        self.vehicle = None
+        if (vehicle.type == VehicleType.TRUCK) {
+            return type == SpotType.LARGE;
+        }
 
+        return false;
+    }
 
-class Floor:
-    def __init__(self, floor_num, spots):
-        self.floor_num = floor_num
-        self.spots = spots           # composition: Floor owns these ParkingSpot objects
+    void park(Vehicle vehicle) {
+        this.vehicle = vehicle;
+    }
 
-    def find_available_spot(self, vehicle):
-        for spot in self.spots:
-            if spot.is_free() and spot.can_fit(vehicle):
-                return spot
-        return None
-
-
-class Ticket:
-    def __init__(self, vehicle, spot):
-        self.ticket_id = str(uuid.uuid4())
-        self.vehicle = vehicle
-        self.spot = spot
-        self.entry_time = datetime.now()
-        self.exit_time = None
-
-
-class Payment:
-    RATE_PER_HOUR = 2.0
-
-    @staticmethod
-    def calculate(ticket: Ticket):
-        duration_hrs = max(1, (ticket.exit_time - ticket.entry_time).seconds // 3600)
-        return duration_hrs * Payment.RATE_PER_HOUR
-
-
-class ParkingLot:                     # Singleton in practice — only one lot
-    def __init__(self, floors):
-        self.floors = floors          # composition: ParkingLot owns Floors
-        self.active_tickets = {}      # ticket_id -> Ticket
-
-    def park_vehicle(self, vehicle) -> Ticket:
-        for floor in self.floors:
-            spot = floor.find_available_spot(vehicle)
-            if spot:
-                spot.assign(vehicle)
-                ticket = Ticket(vehicle, spot)
-                self.active_tickets[ticket.ticket_id] = ticket
-                return ticket
-        raise Exception("Parking lot full for this vehicle type")
-
-    def unpark_vehicle(self, ticket_id):
-        ticket = self.active_tickets.pop(ticket_id)
-        ticket.exit_time = datetime.now()
-        amount = Payment.calculate(ticket)
-        ticket.spot.remove()
-        return amount
-
-
-# --- usage ---
-lot = ParkingLot([Floor(1, [ParkingSpot(f"1-{i}", SpotType.COMPACT) for i in range(5)])])
-car = Car("KA-01-AB-1234")
-t = lot.park_vehicle(car)
-print("Ticket:", t.ticket_id)
-print("Fee:", lot.unpark_vehicle(t.ticket_id))
+    void remove() {
+        this.vehicle = null;
+    }
+}
 ```
 
-**Extensibility talking points:** add a new `SpotType`/`VehicleType` without touching core logic (Open/Closed); swap `Payment` for a `PricingStrategy` interface to support surge pricing / membership discounts (Strategy pattern); make `ParkingLot` a Singleton; add `SpotAssignmentStrategy` (nearest-first vs random) as a pluggable strategy.
+### Floor
+
+```java
+class Floor {
+
+    int floorNumber;
+    List<ParkingSpot> spots;
+
+    Floor(int floorNumber, List<ParkingSpot> spots) {
+        this.floorNumber = floorNumber;
+        this.spots = spots;
+    }
+
+    ParkingSpot findSpot(Vehicle vehicle) {
+
+        for (ParkingSpot spot : spots) {
+
+            if (spot.isFree() && spot.canFit(vehicle)) {
+                return spot;
+            }
+        }
+
+        return null;
+    }
+}
+```
+
+### Ticket
+
+```java
+class Ticket {
+
+    int ticketId;
+    Vehicle vehicle;
+    ParkingSpot spot;
+    long entryTime;
+
+    Ticket(int ticketId, Vehicle vehicle, ParkingSpot spot) {
+
+        this.ticketId = ticketId;
+        this.vehicle = vehicle;
+        this.spot = spot;
+        this.entryTime = System.currentTimeMillis();
+    }
+}
+```
+
+### Payment
+
+```java
+class Payment {
+
+    static double calculateFee(Ticket ticket) {
+
+        long currentTime = System.currentTimeMillis();
+
+        long time = currentTime - ticket.entryTime;
+
+        long hours = time / (1000 * 60 * 60);
+
+        // Minimum 1 hour
+        hours = Math.max(1, hours);
+
+        return hours * 20;
+    }
+}
+```
+
+### Parking Lot
+
+```java
+class ParkingLot {
+
+    List<Floor> floors;
+    Map<Integer, Ticket> tickets = new HashMap<>();
+
+    int nextTicketId = 1;
+
+    ParkingLot(List<Floor> floors) {
+        this.floors = floors;
+    }
+
+    Ticket parkVehicle(Vehicle vehicle) {
+
+        for (Floor floor : floors) {
+
+            ParkingSpot spot = floor.findSpot(vehicle);
+
+            if (spot != null) {
+
+                spot.park(vehicle);
+
+                Ticket ticket =
+                    new Ticket(nextTicketId++, vehicle, spot);
+
+                tickets.put(ticket.ticketId, ticket);
+
+                return ticket;
+            }
+        }
+
+        return null;
+    }
+
+    double removeVehicle(int ticketId) {
+
+        Ticket ticket = tickets.remove(ticketId);
+
+        if (ticket == null) {
+            return -1;
+        }
+
+        ticket.spot.remove();
+
+        return Payment.calculateFee(ticket);
+    }
+}
+```
+
+### Usage
+
+```java
+public class Main {
+
+    public static void main(String[] args) {
+
+        List<ParkingSpot> spots = new ArrayList<>();
+
+        spots.add(new ParkingSpot(1, SpotType.COMPACT));
+        spots.add(new ParkingSpot(2, SpotType.COMPACT));
+        spots.add(new ParkingSpot(3, SpotType.LARGE));
+
+        Floor floor = new Floor(1, spots);
+
+        ParkingLot lot =
+            new ParkingLot(Arrays.asList(floor));
+
+        Vehicle car = new Car("KA01AB1234");
+
+        Ticket ticket = lot.parkVehicle(car);
+
+        System.out.println("Ticket ID: " + ticket.ticketId);
+
+        double fee = lot.removeVehicle(ticket.ticketId);
+
+        System.out.println("Fee: " + fee);
+    }
+}
+```
+
+### OOP concepts demonstrated
+
+```text
+Vehicle → inheritance
+ParkingLot → has Floors
+Floor → has ParkingSpots
+ParkingSpot → associated with Vehicle
+Ticket → associated with Vehicle + Spot
+Payment → separate responsibility
+```
+
+### Interview extensions
+
+If asked how to improve it:
+
+* Add `PricingStrategy` interface for different pricing.
+* Add `SpotAssignmentStrategy` for nearest spot.
+* Add `Singleton` for one parking lot.
+* Add different pricing for car/truck/motorcycle.
 
 ---
 
-### 4.2 Elevator System
+# 2. Elevator System
 
-**Requirements:** multiple elevators, multiple floors, users request pickup (external button) and destination (internal button), a controller dispatches the optimal elevator.
+## Requirements
 
-**Relationships:**
-- `ElevatorController` **manages** many `Elevator` (association/aggregation — controller doesn't "own" lifecycle, just coordinates)
-- `Elevator` **has-a** `Door` (composition)
-- `Elevator` **serves** `Floor`s and processes `Request`s (association)
-- `Request` — encapsulates a floor + direction (or destination floor)
+* Multiple elevators
+* Multiple floors
+* User requests elevator
+* Elevator moves
+* User selects destination
+* Controller decides which elevator to use
 
-```python
-from enum import Enum
-from collections import deque
+## Main Classes
 
-class Direction(Enum):
-    UP = 1
-    DOWN = 2
-    IDLE = 3
+```text
+ElevatorController
+        ↓
+     Elevator
+        ↓
+       Door
 
-class DoorState(Enum):
-    OPEN = 1
-    CLOSED = 2
-
-class Door:
-    def __init__(self):
-        self.state = DoorState.CLOSED
-    def open(self): self.state = DoorState.OPEN
-    def close(self): self.state = DoorState.CLOSED
-
-class Request:
-    def __init__(self, floor, direction=None):
-        self.floor = floor
-        self.direction = direction     # None for internal "go to floor X" requests
-
-class Elevator:
-    def __init__(self, elevator_id, num_floors):
-        self.id = elevator_id
-        self.current_floor = 1
-        self.direction = Direction.IDLE
-        self.door = Door()
-        self.requests = deque()        # pending stops, could be a sorted structure (SCAN algorithm)
-
-    def add_request(self, request: Request):
-        self.requests.append(request)
-
-    def step(self):
-        """Move one floor towards the next requested stop (simplified FCFS; real systems use SCAN/LOOK)."""
-        if not self.requests:
-            self.direction = Direction.IDLE
-            return
-        target = self.requests[0].floor
-        if target > self.current_floor:
-            self.direction = Direction.UP
-            self.current_floor += 1
-        elif target < self.current_floor:
-            self.direction = Direction.DOWN
-            self.current_floor -= 1
-        if self.current_floor == target:
-            self.door.open()
-            self.requests.popleft()
-            self.door.close()
-
-class ElevatorController:
-    def __init__(self, num_elevators, num_floors):
-        self.elevators = [Elevator(i, num_floors) for i in range(num_elevators)]
-
-    def request_elevator(self, floor, direction):
-        """Dispatch algorithm: pick the nearest idle/same-direction elevator."""
-        best = min(
-            self.elevators,
-            key=lambda e: abs(e.current_floor - floor)
-        )
-        best.add_request(Request(floor, direction))
-        return best.id
-
-    def select_floor(self, elevator_id, floor):
-        self.elevators[elevator_id].add_request(Request(floor))
-
-
-# --- usage ---
-controller = ElevatorController(num_elevators=3, num_floors=10)
-eid = controller.request_elevator(floor=5, direction=Direction.UP)
-controller.select_floor(eid, floor=9)
-controller.elevators[eid].step()
+Request
+Direction
 ```
 
-**Extensibility talking points:** replace naive dispatch with a `DispatchStrategy` interface (nearest-car, zoning, destination-dispatch); replace FCFS stop order with SCAN/LOOK algorithm; add `Request` subclasses for maintenance mode / emergency override; make `ElevatorController` a Singleton per building.
+## Code
+
+### Direction
+
+```java
+enum Direction {
+    UP,
+    DOWN,
+    IDLE
+}
+```
+
+### Door
+
+```java
+class Door {
+
+    boolean open = false;
+
+    void open() {
+        open = true;
+        System.out.println("Door opened");
+    }
+
+    void close() {
+        open = false;
+        System.out.println("Door closed");
+    }
+}
+```
+
+### Request
+
+```java
+class Request {
+
+    int floor;
+
+    Request(int floor) {
+        this.floor = floor;
+    }
+}
+```
+
+### Elevator
+
+```java
+class Elevator {
+
+    int id;
+    int currentFloor;
+    Direction direction;
+
+    Door door;
+    Queue<Request> requests;
+
+    Elevator(int id) {
+
+        this.id = id;
+        this.currentFloor = 1;
+        this.direction = Direction.IDLE;
+
+        door = new Door();
+        requests = new LinkedList<>();
+    }
+
+    void addRequest(int floor) {
+
+        requests.add(new Request(floor));
+    }
+
+    void move() {
+
+        if (requests.isEmpty()) {
+            direction = Direction.IDLE;
+            return;
+        }
+
+        int target = requests.peek().floor;
+
+        if (currentFloor < target) {
+
+            direction = Direction.UP;
+            currentFloor++;
+
+        } else if (currentFloor > target) {
+
+            direction = Direction.DOWN;
+            currentFloor++;
+        }
+
+        if (currentFloor == target) {
+
+            door.open();
+
+            requests.poll();
+
+            door.close();
+
+            direction = Direction.IDLE;
+        }
+    }
+}
+```
+
+**Important correction for an interview:** when moving down, `currentFloor` should decrease:
+
+```java
+else if (currentFloor > target) {
+    direction = Direction.DOWN;
+    currentFloor--;
+}
+```
+
+Use that version.
+
+### Elevator Controller
+
+```java
+class ElevatorController {
+
+    List<Elevator> elevators;
+
+    ElevatorController(int numberOfElevators) {
+
+        elevators = new ArrayList<>();
+
+        for (int i = 0; i < numberOfElevators; i++) {
+            elevators.add(new Elevator(i));
+        }
+    }
+
+    int requestElevator(int floor) {
+
+        Elevator best = elevators.get(0);
+
+        int minimumDistance =
+            Math.abs(best.currentFloor - floor);
+
+        for (Elevator elevator : elevators) {
+
+            int distance =
+                Math.abs(elevator.currentFloor - floor);
+
+            if (distance < minimumDistance) {
+
+                minimumDistance = distance;
+                best = elevator;
+            }
+        }
+
+        best.addRequest(floor);
+
+        return best.id;
+    }
+
+    void selectFloor(int elevatorId, int floor) {
+
+        elevators.get(elevatorId).addRequest(floor);
+    }
+}
+```
+
+### Usage
+
+```java
+public class Main {
+
+    public static void main(String[] args) {
+
+        ElevatorController controller =
+            new ElevatorController(3);
+
+        int elevatorId =
+            controller.requestElevator(5);
+
+        controller.selectFloor(elevatorId, 9);
+
+        Elevator elevator =
+            controller.elevators.get(elevatorId);
+
+        while (!elevator.requests.isEmpty()) {
+            elevator.move();
+        }
+    }
+}
+```
+
+### OOP concepts
+
+```text
+Controller → manages Elevators
+Elevator → has Door
+Elevator → has Requests
+Request → stores floor information
+```
+
+### Interview extensions
+
+You can say:
+
+> "For a real system, instead of simply selecting the nearest elevator, I could create a `DispatchStrategy` interface and implement nearest elevator, same-direction elevator, zoning, etc."
 
 ---
 
-### 4.3 Library Management System
+# 3. Library Management System
 
-**Requirements:** catalog of books (possibly multiple copies), users can search/borrow/return, librarians manage inventory and can issue/return on behalf of users, track due dates and fines.
+## Requirements
 
-**Relationships:**
-- `Library` **has-many** `Book` (aggregation — books could be transferred between library branches conceptually)
-- `Book` (title-level) **has-many** `BookItem` (physical copies) — common LLD nuance interviewers like to see
-- `User`/`Librarian` — inheritance from a common `Person` (or `Account`) base
-- `Issue`/`Return` — record association between a `BookItem` and a `User`, could be modeled as one `Loan`/`Transaction` class
+* Add books
+* Multiple copies of the same book
+* Search books
+* Borrow book
+* Return book
+* Track due date
+* Calculate fine
+* Librarian can issue/return books
 
-```python
-from datetime import datetime, timedelta
-from enum import Enum
+## Important design
 
-class BookStatus(Enum):
-    AVAILABLE = 1
-    LOANED = 2
-    LOST = 3
+Don't make only:
 
-class Person:                                 # base class
-    def __init__(self, name, person_id):
-        self.name = name
-        self.id = person_id
-
-class User(Person):                           # inheritance
-    def __init__(self, name, person_id):
-        super().__init__(name, person_id)
-        self.borrowed_items = []               # association to BookItem(s)
-
-class Librarian(Person):                       # inheritance
-    def issue_book(self, library, book_item, user):
-        return library.issue_book(book_item, user)
-
-    def return_book(self, library, book_item):
-        return library.return_book(book_item)
-
-
-class Book:                                    # title-level metadata
-    def __init__(self, isbn, title, author):
-        self.isbn = isbn
-        self.title = title
-        self.author = author
-
-
-class BookItem:                                # a physical copy (association to Book)
-    def __init__(self, barcode, book: Book):
-        self.barcode = barcode
-        self.book = book
-        self.status = BookStatus.AVAILABLE
-        self.due_date = None
-
-
-class Loan:                                    # models Issue + Return together
-    FINE_PER_DAY = 5
-
-    def __init__(self, book_item: BookItem, user: User):
-        self.book_item = book_item
-        self.user = user
-        self.issue_date = datetime.now()
-        self.due_date = self.issue_date + timedelta(days=14)
-        self.return_date = None
-
-    def calculate_fine(self):
-        if self.return_date and self.return_date > self.due_date:
-            days_late = (self.return_date - self.due_date).days
-            return days_late * Loan.FINE_PER_DAY
-        return 0
-
-
-class Library:
-    def __init__(self):
-        self.catalog = {}          # isbn -> Book
-        self.items = []            # all BookItem copies
-        self.active_loans = {}     # barcode -> Loan
-
-    def add_book(self, book: Book, num_copies=1):
-        self.catalog[book.isbn] = book
-        for i in range(num_copies):
-            self.items.append(BookItem(f"{book.isbn}-{i}", book))
-
-    def search_by_title(self, title):
-        return [b for b in self.catalog.values() if title.lower() in b.title.lower()]
-
-    def issue_book(self, book_item: BookItem, user: User):
-        if book_item.status != BookStatus.AVAILABLE:
-            raise Exception("Book not available")
-        loan = Loan(book_item, user)
-        book_item.status = BookStatus.LOANED
-        book_item.due_date = loan.due_date
-        user.borrowed_items.append(book_item)
-        self.active_loans[book_item.barcode] = loan
-        return loan
-
-    def return_book(self, book_item: BookItem):
-        loan = self.active_loans.pop(book_item.barcode)
-        loan.return_date = datetime.now()
-        book_item.status = BookStatus.AVAILABLE
-        book_item.due_date = None
-        loan.user.borrowed_items.remove(book_item)
-        return loan.calculate_fine()
-
-
-# --- usage ---
-library = Library()
-b = Book("978-1", "Clean Code", "Robert Martin")
-library.add_book(b, num_copies=2)
-alice = User("Alice", "U1")
-librarian = Librarian("Mr. Rao", "L1")
-
-item = library.items[0]
-loan = librarian.issue_book(library, item, alice)
-fine = librarian.return_book(library, item)
-print("Fine due:", fine)
+```text
+Book
 ```
 
-**Extensibility talking points:** separate `Book` (title/metadata) from `BookItem` (physical copy) — a classic detail interviewers probe for; add `Reservation`/hold-queue feature; add `NotificationService` (observer pattern) for due-date reminders; support e-books via a `Media`/`Item` interface that both `BookItem` and `EBookItem` implement.
+Instead:
+
+```text
+Book = information about the title
+
+BookItem = actual physical copy
+```
+
+For example:
+
+```text
+Book:
+"Clean Code"
+
+BookItems:
+Copy 1
+Copy 2
+Copy 3
+```
+
+This is a very good interview point.
 
 ---
 
-### 4.4 ATM System
+## Person
 
-**Requirements:** user inserts card + PIN, selects account, withdraws/deposits/checks balance, cash dispenser tracks note denominations, generates a transaction record.
+```java
+class Person {
 
-**Relationships:**
-- `ATM` **has-a** `CashDispenser` (composition)
-- `ATM` **operates on** `Account` via `Card`+authentication (association)
-- `Account` **has-many** `Transaction` (composition — transactions belong to that account's history)
-- `ATM` uses a **State pattern** internally (Idle → HasCard → Authenticated → Transaction → Dispensing) — good to mention
+    String name;
+    String id;
 
-```python
-from enum import Enum
-
-class TransactionType(Enum):
-    WITHDRAW = 1
-    DEPOSIT = 2
-    BALANCE_INQUIRY = 3
-
-class Card:
-    def __init__(self, card_number, pin, account_number):
-        self.card_number = card_number
-        self.__pin = pin                 # encapsulated
-        self.account_number = account_number
-
-    def validate_pin(self, entered_pin):
-        return self.__pin == entered_pin
-
-
-class Transaction:
-    def __init__(self, ttype: TransactionType, amount, balance_after):
-        self.type = ttype
-        self.amount = amount
-        self.balance_after = balance_after
-
-
-class Account:
-    def __init__(self, account_number, balance=0):
-        self.account_number = account_number
-        self.balance = balance
-        self.transactions = []            # composition: history belongs to account
-
-    def withdraw(self, amount):
-        if amount > self.balance:
-            raise Exception("Insufficient funds")
-        self.balance -= amount
-        self.transactions.append(Transaction(TransactionType.WITHDRAW, amount, self.balance))
-
-    def deposit(self, amount):
-        self.balance += amount
-        self.transactions.append(Transaction(TransactionType.DEPOSIT, amount, self.balance))
-
-
-class CashDispenser:
-    def __init__(self):
-        self.denominations = {2000: 0, 500: 20, 200: 20, 100: 50}   # note -> count
-
-    def can_dispense(self, amount):
-        return amount % 100 == 0     # simplification
-
-    def dispense(self, amount):
-        notes_given = {}
-        remaining = amount
-        for note in sorted(self.denominations, reverse=True):
-            count_needed = min(remaining // note, self.denominations[note])
-            if count_needed:
-                notes_given[note] = count_needed
-                remaining -= note * count_needed
-                self.denominations[note] -= count_needed
-        if remaining != 0:
-            raise Exception("Cannot dispense exact amount with available notes")
-        return notes_given
-
-
-class ATM:
-    def __init__(self):
-        self.cash_dispenser = CashDispenser()      # composition
-        self.accounts = {}                          # account_number -> Account (bank backend, simplified)
-        self.authenticated_account = None
-
-    def register_account(self, account: Account):
-        self.accounts[account.account_number] = account
-
-    def insert_card(self, card: Card, pin):
-        if not card.validate_pin(pin):
-            raise Exception("Invalid PIN")
-        self.authenticated_account = self.accounts[card.account_number]
-        return True
-
-    def withdraw(self, amount):
-        acc = self.authenticated_account
-        if not self.cash_dispenser.can_dispense(amount):
-            raise Exception("Invalid amount")
-        acc.withdraw(amount)              # updates account first (or use a transaction/lock in real system)
-        return self.cash_dispenser.dispense(amount)
-
-    def check_balance(self):
-        return self.authenticated_account.balance
-
-    def eject_card(self):
-        self.authenticated_account = None
-
-
-# --- usage ---
-atm = ATM()
-acc = Account("ACC1", balance=10000)
-atm.register_account(acc)
-card = Card("1234-5678", pin="4321", account_number="ACC1")
-
-atm.insert_card(card, "4321")
-notes = atm.withdraw(2300)
-print("Dispensed:", notes)
-print("Balance:", atm.check_balance())
-atm.eject_card()
+    Person(String name, String id) {
+        this.name = name;
+        this.id = id;
+    }
+}
 ```
 
-**Extensibility talking points:** model the ATM's flow explicitly with a **State design pattern** (`IdleState`, `HasCardState`, `SelectOperationState`, `TransactionState`) instead of if/else flags — interviewers love seeing this; separate `Bank`(backend) from `ATM`(client, only has a `CashDispenser` + network call to Bank) for realism; add `TransactionStrategy` for withdraw/deposit/transfer as pluggable operations (Strategy/Command pattern), enabling easy addition of new operation types.
+## User
+
+```java
+class User extends Person {
+
+    List<BookItem> borrowedBooks = new ArrayList<>();
+
+    User(String name, String id) {
+        super(name, id);
+    }
+}
+```
+
+## Librarian
+
+```java
+class Librarian extends Person {
+
+    Librarian(String name, String id) {
+        super(name, id);
+    }
+
+    void issueBook(Library library,
+                   BookItem book,
+                   User user) {
+
+        library.issueBook(book, user);
+    }
+
+    void returnBook(Library library,
+                    BookItem book) {
+
+        library.returnBook(book);
+    }
+}
+```
+
+## Book
+
+```java
+class Book {
+
+    String isbn;
+    String title;
+    String author;
+
+    Book(String isbn, String title, String author) {
+
+        this.isbn = isbn;
+        this.title = title;
+        this.author = author;
+    }
+}
+```
+
+## BookItem
+
+```java
+class BookItem {
+
+    String barcode;
+    Book book;
+
+    boolean available = true;
+
+    BookItem(String barcode, Book book) {
+
+        this.barcode = barcode;
+        this.book = book;
+    }
+}
+```
+
+## Loan
+
+```java
+class Loan {
+
+    BookItem book;
+    User user;
+
+    long issueTime;
+
+    Loan(BookItem book, User user) {
+
+        this.book = book;
+        this.user = user;
+
+        issueTime = System.currentTimeMillis();
+    }
+
+    double calculateFine() {
+
+        long currentTime = System.currentTimeMillis();
+
+        long days =
+            (currentTime - issueTime)
+            / (1000 * 60 * 60 * 24);
+
+        if (days <= 14) {
+            return 0;
+        }
+
+        return (days - 14) * 5;
+    }
+}
+```
+
+## Library
+
+```java
+class Library {
+
+    Map<String, Book> books = new HashMap<>();
+
+    List<BookItem> items = new ArrayList<>();
+
+    Map<String, Loan> activeLoans = new HashMap<>();
+
+    void addBook(Book book, int copies) {
+
+        books.put(book.isbn, book);
+
+        for (int i = 1; i <= copies; i++) {
+
+            String barcode =
+                book.isbn + "-" + i;
+
+            items.add(
+                new BookItem(barcode, book)
+            );
+        }
+    }
+
+    List<Book> search(String title) {
+
+        List<Book> result = new ArrayList<>();
+
+        for (Book book : books.values()) {
+
+            if (book.title
+                .toLowerCase()
+                .contains(title.toLowerCase())) {
+
+                result.add(book);
+            }
+        }
+
+        return result;
+    }
+
+    Loan issueBook(BookItem item, User user) {
+
+        if (!item.available) {
+            return null;
+        }
+
+        item.available = false;
+
+        Loan loan = new Loan(item, user);
+
+        activeLoans.put(item.barcode, loan);
+
+        user.borrowedBooks.add(item);
+
+        return loan;
+    }
+
+    double returnBook(BookItem item) {
+
+        Loan loan =
+            activeLoans.remove(item.barcode);
+
+        if (loan == null) {
+            return 0;
+        }
+
+        item.available = true;
+
+        loan.user.borrowedBooks.remove(item);
+
+        return loan.calculateFine();
+    }
+}
+```
+
+## Usage
+
+```java
+public class Main {
+
+    public static void main(String[] args) {
+
+        Library library = new Library();
+
+        Book book =
+            new Book(
+                "978-1",
+                "Clean Code",
+                "Robert Martin"
+            );
+
+        library.addBook(book, 2);
+
+        User user =
+            new User("Alice", "U1");
+
+        Librarian librarian =
+            new Librarian("Rao", "L1");
+
+        BookItem item =
+            library.items.get(0);
+
+        librarian.issueBook(
+            library,
+            item,
+            user
+        );
+
+        double fine =
+            library.returnBook(item);
+
+        System.out.println("Fine: " + fine);
+    }
+}
+```
+
+### OOP concepts
+
+```text
+Person
+ ├── User
+ └── Librarian
+
+Library → has Books/BookItems
+Book → title information
+BookItem → physical copy
+Loan → connects User + BookItem
+```
+
+### Interview extensions
+
+Add:
+
+* Reservation
+* E-books
+* Notification service
+* Multiple library branches
+* Different user types
+* Maximum borrowing limits
 
 ---
 
-### 4.5 Tic Tac Toe
+# 4. ATM System
 
-**Requirements:** 2 players, 3x3 board (or NxN), alternate turns, detect win/draw, replay-able.
+## Requirements
 
-**Relationships:**
-- `Game` **has-a** `Board` (composition)
-- `Game` **has-many** `Player` (composition/aggregation, 2 players)
-- `Game` **records** `Move`s (composition — a move history belongs to that game instance)
-- `Player` **has-a** `Symbol` (X/O) — could be an enum
+* Insert card
+* Validate PIN
+* Check balance
+* Withdraw
+* Deposit
+* Dispense cash
+* Store transactions
 
-```python
-from enum import Enum
+## Main Classes
 
-class Symbol(Enum):
-    X = "X"
-    O = "O"
-    EMPTY = " "
+```text
+ATM
+ ├── CashDispenser
+ └── Account
 
-class Player:
-    def __init__(self, name, symbol: Symbol):
-        self.name = name
-        self.symbol = symbol
-
-class Move:
-    def __init__(self, row, col, symbol: Symbol):
-        self.row = row
-        self.col = col
-        self.symbol = symbol
-
-class Board:
-    def __init__(self, size=3):
-        self.size = size
-        self.grid = [[Symbol.EMPTY for _ in range(size)] for _ in range(size)]
-
-    def place(self, move: Move):
-        if self.grid[move.row][move.col] != Symbol.EMPTY:
-            raise Exception("Cell already occupied")
-        self.grid[move.row][move.col] = move.symbol
-
-    def is_full(self):
-        return all(cell != Symbol.EMPTY for row in self.grid for cell in row)
-
-    def check_winner(self):
-        lines = []
-        lines.extend(self.grid)                                          # rows
-        lines.extend([list(col) for col in zip(*self.grid)])              # cols
-        lines.append([self.grid[i][i] for i in range(self.size)])         # main diagonal
-        lines.append([self.grid[i][self.size - 1 - i] for i in range(self.size)])  # anti-diagonal
-
-        for line in lines:
-            if line[0] != Symbol.EMPTY and all(cell == line[0] for cell in line):
-                return line[0]
-        return None
-
-    def print_board(self):
-        for row in self.grid:
-            print(" | ".join(cell.value for cell in row))
-
-
-class Game:
-    def __init__(self, player1: Player, player2: Player, size=3):
-        self.board = Board(size)             # composition
-        self.players = [player1, player2]    # composition
-        self.moves = []                      # composition: move history
-        self.current_player_idx = 0
-        self.winner = None
-
-    def play_move(self, row, col):
-        player = self.players[self.current_player_idx]
-        move = Move(row, col, player.symbol)
-        self.board.place(move)
-        self.moves.append(move)
-
-        result = self.board.check_winner()
-        if result:
-            self.winner = player
-            return f"{player.name} wins!"
-        if self.board.is_full():
-            return "It's a draw!"
-
-        self.current_player_idx = 1 - self.current_player_idx   # switch turn
-        return "Next turn"
-
-
-# --- usage ---
-p1 = Player("Alice", Symbol.X)
-p2 = Player("Bob", Symbol.O)
-game = Game(p1, p2)
-
-print(game.play_move(0, 0))   # X
-print(game.play_move(1, 1))   # O
-print(game.play_move(0, 1))   # X
-print(game.play_move(2, 2))   # O
-print(game.play_move(0, 2))   # X wins (top row)
-game.board.print_board()
+Card
+Account
+Transaction
 ```
+
+---
+
+## Transaction Type
+
+```java
+enum TransactionType {
+    WITHDRAW,
+    DEPOSIT
+}
+```
+
+## Card
+
+```java
+class Card {
+
+    String cardNumber;
+    String pin;
+    String accountNumber;
+
+    Card(String cardNumber,
+         String pin,
+         String accountNumber) {
+
+        this.cardNumber = cardNumber;
+        this.pin = pin;
+        this.accountNumber = accountNumber;
+    }
+
+    boolean validatePin(String enteredPin) {
+
+        return pin.equals(enteredPin);
+    }
+}
+```
+
+## Transaction
+
+```java
+class Transaction {
+
+    TransactionType type;
+    double amount;
+
+    Transaction(TransactionType type,
+                double amount) {
+
+        this.type = type;
+        this.amount = amount;
+    }
+}
+```
+
+## Account
+
+```java
+class Account {
+
+    String accountNumber;
+    double balance;
+
+    List<Transaction> transactions =
+        new ArrayList<>();
+
+    Account(String accountNumber,
+            double balance) {
+
+        this.accountNumber = accountNumber;
+        this.balance = balance;
+    }
+
+    void deposit(double amount) {
+
+        balance += amount;
+
+        transactions.add(
+            new Transaction(
+                TransactionType.DEPOSIT,
+                amount
+            )
+        );
+    }
+
+    boolean withdraw(double amount) {
+
+        if (amount > balance) {
+            return false;
+        }
+
+        balance -= amount;
+
+        transactions.add(
+            new Transaction(
+                TransactionType.WITHDRAW,
+                amount
+            )
+        );
+
+        return true;
+    }
+}
+```
+
+## Cash Dispenser
+
+Keep this simple for an interview:
+
+```java
+class CashDispenser {
+
+    int cash = 100000;
+
+    boolean canDispense(int amount) {
+
+        return amount <= cash &&
+               amount % 100 == 0;
+    }
+
+    boolean dispense(int amount) {
+
+        if (!canDispense(amount)) {
+            return false;
+        }
+
+        cash -= amount;
+
+        System.out.println(
+            "Cash dispensed: " + amount
+        );
+
+        return true;
+    }
+}
+```
+
+## ATM
+
+```java
+class ATM {
+
+    CashDispenser dispenser =
+        new CashDispenser();
+
+    Map<String, Account> accounts =
+        new HashMap<>();
+
+    Account currentAccount;
+
+    void addAccount(Account account) {
+
+        accounts.put(
+            account.accountNumber,
+            account
+        );
+    }
+
+    boolean insertCard(Card card,
+                       String enteredPin) {
+
+        if (!card.validatePin(enteredPin)) {
+
+            System.out.println("Wrong PIN");
+            return false;
+        }
+
+        currentAccount =
+            accounts.get(card.accountNumber);
+
+        return true;
+    }
+
+    void checkBalance() {
+
+        System.out.println(
+            "Balance: " +
+            currentAccount.balance
+        );
+    }
+
+    void withdraw(int amount) {
+
+        if (!dispenser.canDispense(amount)) {
+
+            System.out.println(
+                "Cannot dispense cash"
+            );
+
+            return;
+        }
+
+        if (!currentAccount.withdraw(amount)) {
+
+            System.out.println(
+                "Insufficient balance"
+            );
+
+            return;
+        }
+
+        dispenser.dispense(amount);
+
+        System.out.println(
+            "Remaining balance: " +
+            currentAccount.balance
+        );
+    }
+
+    void deposit(double amount) {
+
+        currentAccount.deposit(amount);
+    }
+
+    void ejectCard() {
+
+        currentAccount = null;
+    }
+}
+```
+
+## Usage
+
+```java
+public class Main {
+
+    public static void main(String[] args) {
+
+        ATM atm = new ATM();
+
+        Account account =
+            new Account("A1", 10000);
+
+        atm.addAccount(account);
+
+        Card card =
+            new Card(
+                "1234",
+                "4321",
+                "A1"
+            );
+
+        atm.insertCard(card, "4321");
+
+        atm.checkBalance();
+
+        atm.withdraw(2000);
+
+        atm.deposit(1000);
+
+        atm.checkBalance();
+
+        atm.ejectCard();
+    }
+}
+```
+
+### OOP concepts
+
+```text
+ATM → has CashDispenser
+ATM → works with Account
+Card → authenticates User
+Account → has Transactions
+```
+
+### Important interview point
+
+If asked:
+
+> "How would you make the ATM design better?"
+
+Say:
+
+> "I would model the ATM using the State pattern, with states such as Idle, CardInserted, Authenticated and Transaction. This avoids a large number of if-else conditions."
+
+---
+
+# 5. Tic-Tac-Toe
+
+## Requirements
+
+* Two players
+* 3×3 board
+* X and O
+* Alternate turns
+* Detect winner
+* Detect draw
+
+## Main Classes
+
+```text
+Game
+ ├── Board
+ ├── Player
+ └── Move
+```
+
+---
+
+## Symbol
+
+```java
+enum Symbol {
+    X,
+    O
+}
+```
+
+## Player
+
+```java
+class Player {
+
+    String name;
+    Symbol symbol;
+
+    Player(String name, Symbol symbol) {
+
+        this.name = name;
+        this.symbol = symbol;
+    }
+}
+```
+
+## Move
+
+```java
+class Move {
+
+    int row;
+    int col;
+    Symbol symbol;
+
+    Move(int row, int col, Symbol symbol) {
+
+        this.row = row;
+        this.col = col;
+        this.symbol = symbol;
+    }
+}
+```
+
+## Board
+
+```java
+class Board {
+
+    int size;
+    Symbol[][] board;
+
+    Board(int size) {
+
+        this.size = size;
+
+        board = new Symbol[size][size];
+
+        for (int i = 0; i < size; i++) {
+
+            for (int j = 0; j < size; j++) {
+
+                board[i][j] = null;
+            }
+        }
+    }
+
+    boolean placeMove(Move move) {
+
+        if (board[move.row][move.col] != null) {
+            return false;
+        }
+
+        board[move.row][move.col] =
+            move.symbol;
+
+        return true;
+    }
+
+    boolean isFull() {
+
+        for (int i = 0; i < size; i++) {
+
+            for (int j = 0; j < size; j++) {
+
+                if (board[i][j] == null) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    Symbol checkWinner() {
+
+        // Rows
+        for (int i = 0; i < size; i++) {
+
+            if (board[i][0] == null) {
+                continue;
+            }
+
+            boolean same = true;
+
+            for (int j = 1; j < size; j++) {
+
+                if (board[i][j] != board[i][0]) {
+                    same = false;
+                    break;
+                }
+            }
+
+            if (same) {
+                return board[i][0];
+            }
+        }
+
+        // Columns
+        for (int j = 0; j < size; j++) {
+
+            if (board[0][j] == null) {
+                continue;
+            }
+
+            boolean same = true;
+
+            for (int i = 1; i < size; i++) {
+
+                if (board[i][j] != board[0][j]) {
+                    same = false;
+                    break;
+                }
+            }
+
+            if (same) {
+                return board[0][j];
+            }
+        }
+
+        // Main diagonal
+        if (board[0][0] != null) {
+
+            boolean same = true;
+
+            for (int i = 1; i < size; i++) {
+
+                if (board[i][i] != board[0][0]) {
+                    same = false;
+                    break;
+                }
+            }
+
+            if (same) {
+                return board[0][0];
+            }
+        }
+
+        // Other diagonal
+        if (board[0][size - 1] != null) {
+
+            boolean same = true;
+
+            for (int i = 1; i < size; i++) {
+
+                if (board[i][size - 1 - i]
+                    != board[0][size - 1]) {
+
+                    same = false;
+                    break;
+                }
+            }
+
+            if (same) {
+                return board[0][size - 1];
+            }
+        }
+
+        return null;
+    }
+
+    void printBoard() {
+
+        for (int i = 0; i < size; i++) {
+
+            for (int j = 0; j < size; j++) {
+
+                if (board[i][j] == null) {
+                    System.out.print("-");
+                } else {
+                    System.out.print(
+                        board[i][j]
+                    );
+                }
+
+                if (j < size - 1) {
+                    System.out.print(" | ");
+                }
+            }
+
+            System.out.println();
+        }
+    }
+}
+```
+
+## Game
+
+```java
+class Game {
+
+    Board board;
+
+    Player[] players;
+
+    int currentPlayer = 0;
+
+    Game(Player p1, Player p2) {
+
+        board = new Board(3);
+
+        players = new Player[2];
+
+        players[0] = p1;
+        players[1] = p2;
+    }
+
+    String play(int row, int col) {
+
+        Player player =
+            players[currentPlayer];
+
+        Move move =
+            new Move(
+                row,
+                col,
+                player.symbol
+            );
+
+        if (!board.placeMove(move)) {
+
+            return "Cell already occupied";
+        }
+
+        Symbol winner =
+            board.checkWinner();
+
+        if (winner != null) {
+
+            return player.name + " wins!";
+        }
+
+        if (board.isFull()) {
+
+            return "Draw!";
+        }
+
+        currentPlayer =
+            1 - currentPlayer;
+
+        return "Next turn";
+    }
+}
+```
+
+## Usage
+
+```java
+public class Main {
+
+    public static void main(String[] args) {
+
+        Player p1 =
+            new Player("Alice", Symbol.X);
+
+        Player p2 =
+            new Player("Bob", Symbol.O);
+
+        Game game =
+            new Game(p1, p2);
+
+        System.out.println(
+            game.play(0, 0)
+        );
+
+        System.out.println(
+            game.play(1, 1)
+        );
+
+        System.out.println(
+            game.play(0, 1)
+        );
+
+        System.out.println(
+            game.play(2, 2)
+        );
+
+        System.out.println(
+            game.play(0, 2)
+        );
+
+        game.board.printBoard();
+    }
+}
+```
+
+Output:
+
+```text
+Alice's turn → X
+Bob's turn   → O
+Alice's turn → X
+Bob's turn   → O
+Alice wins!
+```
+
+---
+
+# 6. OOP CONCEPTS USED IN THESE LLD QUESTIONS
+
+When presenting an LLD in an interview, explicitly point out the OOP concepts.
+
+## Inheritance
+
+```java
+class User extends Person {
+}
+```
+
+```text
+Person
+ ├── User
+ └── Librarian
+```
+
+---
+
+## Composition
+
+```java
+class Car {
+
+    Engine engine;
+
+    Car() {
+        engine = new Engine();
+    }
+}
+```
+
+The object owns another object.
+
+Examples from these designs:
+
+```text
+ParkingLot → Floors
+Floor → ParkingSpots
+Elevator → Door
+Game → Board
+ATM → CashDispenser
+```
+
+---
+
+## Association
+
+Objects simply interact.
+
+```java
+class ParkingSpot {
+
+    Vehicle vehicle;
+}
+```
+
+The spot is associated with a vehicle when occupied.
+
+---
+
+## Encapsulation
+
+```java
+class Account {
+
+    private double balance;
+
+    public double getBalance() {
+        return balance;
+    }
+}
+```
+
+Keep important data private and control how it is changed.
+
+---
+
+## Abstraction
+
+Use an interface when you want interchangeable behavior.
+
+Example:
+
+```java
+interface PricingStrategy {
+
+    double calculateFee(Ticket ticket);
+}
+```
+
+Then:
+
+```java
+class NormalPricing implements PricingStrategy {
+
+    public double calculateFee(Ticket ticket) {
+        return 20;
+    }
+}
+```
+
+Another implementation could be:
+
+```java
+class WeekendPricing implements PricingStrategy {
+
+    public double calculateFee(Ticket ticket) {
+        return 30;
+    }
+}
+```
+
+The parking lot doesn't need to know how pricing works.
+
+---
+
+# 7. IMPORTANT DESIGN PATTERNS TO MENTION
+
+You don't need to implement every pattern unless asked.
+
+Know these basic ones:
+
+### Singleton
+
+One object.
+
+Example:
+
+```text
+ParkingLot
+ElevatorController
+```
+
+---
+
+### Strategy
+
+Change an algorithm/behavior without changing the main class.
+
+Examples:
+
+```text
+PricingStrategy
+DispatchStrategy
+SpotAssignmentStrategy
+```
+
+---
+
+### State
+
+Object behaves differently depending on its state.
+
+Perfect for:
+
+```text
+ATM
+Elevator
+```
+
+ATM:
+
+```text
+Idle
+ ↓
+Card Inserted
+ ↓
+Authenticated
+ ↓
+Transaction
+ ↓
+Idle
+```
+
+---
+
+### Observer
+
+Notify multiple objects when something happens.
+
+Example:
+
+```text
+Library
+   ↓
+Book due
+   ↓
+NotificationService
+   ├── Email
+   └── SMS
+```
+
+---
+
+# 8. HOW TO APPROACH AN LLD QUESTION IN AN INTERVIEW
+
+If interviewer says:
+
+> "Design a Parking Lot."
+
+Don't immediately start coding.
+
+Follow:
+
+### Step 1 — Requirements
+
+Ask:
+
+> "How many floors?"
+
+> "What vehicle types?"
+
+> "What spot types?"
+
+> "How should pricing work?"
+
+---
+
+### Step 2 — Identify classes
+
+For Parking Lot:
+
+```text
+ParkingLot
+Floor
+ParkingSpot
+Vehicle
+Ticket
+Payment
+```
+
+---
+
+### Step 3 — Identify relationships
+
+```text
+ParkingLot HAS Floors
+Floor HAS ParkingSpots
+ParkingSpot HAS Vehicle
+Ticket HAS Vehicle + Spot
+```
+
+---
+
+### Step 4 — Identify inheritance
+
+```text
+Vehicle
+ ├── Car
+ ├── Motorcycle
+ └── Truck
+```
+
+---
+
+### Step 5 — Write important methods
+
+```java
+parkVehicle()
+removeVehicle()
+findSpot()
+calculateFee()
+```
+
+---
+
+### Step 6 — Code the core flow
+
+Don't try to implement every possible feature.
+
+Get this working first:
+
+```text
+Vehicle
+   ↓
+Find Spot
+   ↓
+Park
+   ↓
+Generate Ticket
+   ↓
+Remove Vehicle
+   ↓
+Calculate Fee
+```
+
+---
+
+### Step 7 — Discuss extensibility
+
+Then mention:
+
+> "If requirements change, I would introduce Strategy/State interfaces rather than putting everything into one large class."
+
+That is usually much better than writing 500 lines of code.
+
+---
+
+# 9. WHAT TO MEMORIZE FOR FRESHER LLD
+
+You do **not** need to memorize all these implementations line by line.
+
+Memorize the structure.
+
+## Parking Lot
+
+```text
+Vehicle
+ParkingSpot
+Floor
+ParkingLot
+Ticket
+Payment
+```
+
+## Elevator
+
+```text
+Request
+Door
+Elevator
+ElevatorController
+```
+
+## Library
+
+```text
+Person
+User
+Librarian
+Book
+BookItem
+Loan
+Library
+```
+
+## ATM
+
+```text
+Card
+Account
+Transaction
+CashDispenser
+ATM
+```
+
+## Tic-Tac-Toe
+
+```text
+Player
+Move
+Board
+Game
+```
+
+And remember the relationships:
+
+```text
+IS-A  → inheritance
+HAS-A → composition/aggregation
+USES  → association/dependency
+```
+
+The goal in a fresher interview is to show that you can take **requirements → classes → relationships → OOP principles → working code**, rather than producing a huge enterprise-level architecture.
+
 
 **Extensibility talking points:** generalize to NxN board (already done above); support an `AIPlayer` subclass of `Player` implementing minimax — shows polymorphism in action (`Player` as abstract base, `HumanPlayer`/`AIPlayer` as subclasses); add `GameState` (IN_PROGRESS/WON/DRAW) enum instead of ad hoc return strings; add undo via the `moves` history (Memento-pattern flavor).
 
