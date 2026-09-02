@@ -1,4 +1,5 @@
 //Polymorphism means "many forms." It allows objects of different classes to be treated through a common interface while executing their own specific implementation of a behavior.
+//THROUGH METHOD OVERRIDING
 interface PaymentMethod {
     void pay(double amount);
 }
