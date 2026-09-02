@@ -1,3 +1,4 @@
+//Encapsulation means bundling an object's data and behavior together while restricting uncontrolled access to its internal state.
 class BankAccount {
     private String accountHolder;
     private double balance;
