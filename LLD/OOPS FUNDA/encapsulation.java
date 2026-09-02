@@ -21,3 +21,12 @@ class BankAccount {
         balance -= amount;
     }
 }
+
+public class Main {
+    public static void main(String[] args) {
+        BankAccount account = new BankAccount("Kanika", 1000);
+        account.deposit(500);
+        account.withdraw(200);
+        System.out.println(account.getBalance());
+    }
+}
