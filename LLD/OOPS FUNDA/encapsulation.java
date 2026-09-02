@@ -1,0 +1,23 @@
+class BankAccount {
+    private String accountHolder;
+    private double balance;
+    public BankAccount(String accountHolder, double initialBalance) {
+        this.accountHolder = accountHolder;
+        this.balance = initialBalance;
+    }
+    public double getBalance() {
+        return balance;
+    }
+    public void deposit(double amount) {
+        if (amount <= 0) {
+            throw new IllegalArgumentException("Invalid deposit amount");
+        }
+        balance += amount;
+    }
+    public void withdraw(double amount) {
+        if (amount <= 0 || amount > balance) {
+            throw new IllegalArgumentException("Invalid withdrawal amount");
+        }
+        balance -= amount;
+    }
+}
