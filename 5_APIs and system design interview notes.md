@@ -1,4 +1,4 @@
-# APIs / Web + System Design (HLD) — Interview Prep Notes
+# APIs / Web + System Design (HLD) 
 ### (Coupa L3-focused)
 
 ---
