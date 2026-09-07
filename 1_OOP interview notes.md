@@ -1,4 +1,4 @@
-# OOP Interview Notes (Java)
+# OOP Interview Notes 
 
 ---
 
