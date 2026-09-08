@@ -34,7 +34,7 @@ public class Main {
 }
 ```
 
-**Interview line:** "A class defines structure and behavior; an object is a concrete instantiation with its own state in memory."
+"A class defines structure and behavior; an object is a concrete instantiation with its own state in memory."
 
 ---
 
