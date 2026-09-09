@@ -12,12 +12,10 @@ A class is a blueprint. An object is a runtime instance of that class, occupying
 class Car {
     String brand;
     int speed;
-
     Car(String brand, int speed) {
         this.brand = brand;
         this.speed = speed;
     }
-
     int accelerate(int amount) {
         speed += amount;
         return speed;
