@@ -1,5 +1,5 @@
 # Interview Prep Notes: System Failure Handling + OS Fundamentals
-### (Target: Coupa, L3-style rounds)
+
 
 ---
 
