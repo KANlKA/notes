@@ -26,8 +26,7 @@ Always answer in this shape: **Detect → Contain → Degrade gracefully → Rec
 | Node dies | **Replication** — replica gets promoted |
 | Automatic promotion | **Failover** — via Redis Sentinel or Redis Cluster |
 
-### Read-through cache with fallback (Python)
-
+### Read-through cache with fallback 
 ```python
 import redis
 from redis.exceptions import RedisError
