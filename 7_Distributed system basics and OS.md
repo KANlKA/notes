@@ -1,4 +1,4 @@
-# Interview Prep Notes: System Failure Handling + OS Fundamentals
+# Interview Prep Notes: System Failure Handling AND OS Fundamentals
 
 
 
