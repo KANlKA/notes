@@ -464,7 +464,7 @@ def consumer():
 
 ---
 
-# Quick-Fire Answers (for rapid-fire rounds)
+# Quick-Fire Answers 
 
 - **Why timeout before retry?** Without a timeout you don't know when to give up and retry — you'd hang forever.
 - **Why jitter in backoff?** Prevents synchronized retry storms (thundering herd) from many clients recovering at the same instant.
